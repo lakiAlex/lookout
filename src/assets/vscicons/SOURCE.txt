@@ -1,0 +1,2 @@
+Icons - Maintained 1.2.12 (VS Code extension yusifaliyevpro.vscicons), MIT.
+icons/ and icons.json are copied unmodified from the installed extension.
