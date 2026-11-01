@@ -1,0 +1,264 @@
+import { Channel } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
+import { Terminal } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { api } from "../api";
+import { fontCss, type Settings } from "../lib/settings";
+import { terminalColors } from "../lib/terminalThemes";
+import type { Theme } from "../lib/theme";
+
+/** What the rest of the app can do with a terminal. */
+export interface TerminalHandle {
+  /** Types text as if pasted, so programs like Claude Code treat it as one paste. */
+  paste: (text: string) => void;
+  /** Sends raw input to the program. */
+  send: (data: string) => void;
+  focus: () => void;
+  clear: () => void;
+  find: () => void;
+  sessionId: () => string | null;
+}
+
+export const terminals = new Map<string, TerminalHandle>();
+
+
+interface TerminalViewProps {
+  tabId: string;
+  cwd: string | null;
+  /** A command typed into the shell once it starts, like "claude". */
+  run: string | null;
+  active: boolean;
+  theme: Theme;
+  /** An id from TERMINAL_THEMES. */
+  terminalTheme: string;
+  fontSize: number;
+  settings: Settings;
+  onSession: (sessionId: string) => void;
+}
+
+export function TerminalView(props: TerminalViewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const sessionRef = useRef<string | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [query, setQuery] = useState("");
+  const findInput = useRef<HTMLInputElement>(null);
+  const latest = useRef(props);
+  latest.current = props;
+
+  useEffect(() => {
+    const term = new Terminal({
+      fontFamily: fontCss(props.settings.font),
+      fontSize: props.fontSize,
+      lineHeight: props.settings.lineHeight,
+      cursorBlink: props.settings.cursorBlink,
+      cursorStyle: props.settings.cursorStyle,
+      scrollback: props.settings.scrollback,
+      allowProposedApi: true,
+      // By default Option types characters (@, $, [ and ] on many keyboards); word jumps are mapped below.
+      macOptionIsMeta: props.settings.optionIsMeta,
+      macOptionClickForcesSelection: true,
+      // The background is transparent so the terminal shows the same color as the top bar.
+      allowTransparency: true,
+      theme: terminalColors(props.terminalTheme, props.theme),
+    });
+    const fit = new FitAddon();
+    const search = new SearchAddon();
+    const unicode = new Unicode11Addon();
+    term.loadAddon(fit);
+    term.loadAddon(search);
+    term.loadAddon(unicode);
+    term.unicode.activeVersion = "11";
+    term.loadAddon(new WebLinksAddon((_event, uri) => void openUrl(uri)));
+    term.open(containerRef.current!);
+    try {
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => webgl.dispose());
+      term.loadAddon(webgl);
+    } catch {
+      // Without WebGL xterm draws with the DOM renderer.
+    }
+    fit.fit();
+    termRef.current = term;
+    fitRef.current = fit;
+    searchRef.current = search;
+
+    const send = (data: string) => {
+      if (sessionRef.current) void api.ptyWrite(sessionRef.current, data);
+    };
+
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return true;
+      // Shift+Return is a new line in Claude Code's prompt (what its /terminal-setup configures).
+      if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey) {
+        send("\x1b\r");
+        return false;
+      }
+      if (e.metaKey) {
+        const map: Record<string, string> = { ArrowLeft: "\x01", ArrowRight: "\x05", Backspace: "\x15" };
+        if (map[e.key]) {
+          send(map[e.key]);
+          return false;
+        }
+        // Other ⌘ shortcuts belong to the app (copy and paste come through the Edit menu).
+        return false;
+      }
+      if (e.altKey && !e.ctrlKey) {
+        const map: Record<string, string> = { ArrowLeft: "\x1bb", ArrowRight: "\x1bf", Backspace: "\x17" };
+        if (map[e.key]) {
+          send(map[e.key]);
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const channel = new Channel<ArrayBuffer>();
+    channel.onmessage = (data) => term.write(new Uint8Array(data));
+    term.onData(send);
+    term.onSelectionChange(() => {
+      if (latest.current.settings.copyOnSelect && term.hasSelection()) void api.copyText(term.getSelection());
+    });
+    term.onBinary((data) => send(data));
+    term.onResize(({ cols, rows }) => {
+      if (sessionRef.current) void api.ptyResize(sessionRef.current, cols, rows);
+    });
+
+    let disposed = false;
+    void api.ptySpawn(props.cwd, term.cols, term.rows, props.run, channel).then(
+      (id) => {
+        if (disposed) {
+          void api.ptyKill(id);
+          return;
+        }
+        sessionRef.current = id;
+        props.onSession(id);
+      },
+      (e) => term.write(`\r\n\x1b[31mCould not start the shell: ${String(e?.message ?? e)}\x1b[0m\r\n`),
+    );
+
+    const handle: TerminalHandle = {
+      paste: (text) => term.paste(text),
+      send,
+      focus: () => term.focus(),
+      clear: () => term.clear(),
+      find: () => {
+        setFinding(true);
+        requestAnimationFrame(() => findInput.current?.select());
+      },
+      sessionId: () => sessionRef.current,
+    };
+    terminals.set(props.tabId, handle);
+
+    const observer = new ResizeObserver(() => {
+      if (containerRef.current?.offsetParent) fit.fit();
+    });
+    observer.observe(containerRef.current!);
+
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      terminals.delete(props.tabId);
+      if (sessionRef.current) void api.ptyKill(sessionRef.current);
+      term.dispose();
+    };
+  }, []);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.theme = terminalColors(props.terminalTheme, props.theme);
+  }, [props.theme, props.terminalTheme]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.fontSize = props.fontSize;
+    fitRef.current?.fit();
+  }, [props.fontSize]);
+
+  const { cursorStyle, cursorBlink, font, lineHeight, optionIsMeta, scrollback } = props.settings;
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.cursorStyle = cursorStyle;
+    term.options.cursorBlink = cursorBlink;
+    term.options.macOptionIsMeta = optionIsMeta;
+    term.options.scrollback = scrollback;
+    if (term.options.fontFamily !== fontCss(font) || term.options.lineHeight !== lineHeight) {
+      term.options.fontFamily = fontCss(font);
+      term.options.lineHeight = lineHeight;
+      fitRef.current?.fit();
+    }
+  }, [cursorStyle, cursorBlink, font, lineHeight, optionIsMeta, scrollback]);
+
+  useEffect(() => {
+    if (!props.active) return;
+    // A hidden terminal has no size; it is measured again when shown.
+    requestAnimationFrame(() => {
+      fitRef.current?.fit();
+      termRef.current?.focus();
+    });
+  }, [props.active]);
+
+  const findStep = (next: boolean) => {
+    if (!query) return;
+    const options = { decorations: { matchOverviewRuler: "#888", activeMatchColorOverviewRuler: "#fff", activeMatchBackground: "#e0af68", matchBackground: "#e0af6855" } };
+    if (next) searchRef.current?.findNext(query, options);
+    else searchRef.current?.findPrevious(query, options);
+  };
+
+  return (
+    <div className={`terminal-view${props.active ? "" : " hidden"}`}>
+      {finding && (
+        <div className="term-find">
+          <input
+            ref={findInput}
+            value={query}
+            placeholder="Find"
+            spellCheck={false}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                findStep(!e.shiftKey);
+              } else if (e.key === "Escape") {
+                setFinding(false);
+                searchRef.current?.clearDecorations();
+                termRef.current?.focus();
+              }
+            }}
+          />
+          <button type="button" className="icon-button" title="Previous" onClick={() => findStep(false)}>
+            <ChevronUp size={14} />
+          </button>
+          <button type="button" className="icon-button" title="Next" onClick={() => findStep(true)}>
+            <ChevronDown size={14} />
+          </button>
+          <button
+            type="button"
+            className="icon-button"
+            title="Close"
+            onClick={() => {
+              setFinding(false);
+              searchRef.current?.clearDecorations();
+              termRef.current?.focus();
+            }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      <div ref={containerRef} className="terminal-host" />
+    </div>
+  );
+}
