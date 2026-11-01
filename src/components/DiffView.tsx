@@ -2,7 +2,7 @@ import { LanguageSupport } from "@codemirror/language";
 import { MergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
-import { FileText } from "lucide-react";
+import { FileText } from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { api, basename } from "../api";
 import { editorTheme, highlight, languageFor } from "../lib/editor";

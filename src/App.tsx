@@ -16,6 +16,7 @@ import {
   FolderPlus,
   GitBranch,
   GitCompare,
+  Keyboard,
   Moon,
   Option,
   Pencil,
@@ -31,10 +32,10 @@ import {
   Terminal,
   Trash2,
   X,
-} from "lucide-react";
+} from "./components/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { api, basename, dirname, relative, tildify, toAppError, type AppError, type Entry, type GitFile, type GitStatus, type Pick } from "./api";
-import { Codicon } from "./components/Codicon";
+import { SidebarIcon, type SidebarIconName } from "./components/SidebarIcon";
 import { MemeButton } from "./components/Meme";
 import { ContextMenu, type MenuEntry, type MenuState } from "./components/ContextMenu";
 import { ChoiceDialog, InputDialog } from "./components/Dialogs";
@@ -46,7 +47,7 @@ import { QuickOpen } from "./components/QuickOpen";
 import { SearchPanel } from "./components/SearchPanel";
 import { terminals, TerminalView } from "./components/TerminalView";
 import { EDITOR_THEME_KEY, EDITOR_THEMES, editorColors, savedEditorTheme } from "./lib/editorThemes";
-import { availableFonts, fontCss, LINE_HEIGHTS, loadSettings, saveSetting, SCROLLBACK, type Settings } from "./lib/settings";
+import { availableFonts, BLINK_SPEEDS, fontCss, KEY_REPEAT, LINE_HEIGHTS, loadSettings, saveSetting, SCROLLBACK, type Settings } from "./lib/settings";
 import { savedTerminalTheme, TERMINAL_THEME_KEY, TERMINAL_THEMES, terminalColors } from "./lib/terminalThemes";
 import { iconUrl } from "./icons";
 
@@ -111,6 +112,8 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === "light" ? "light" : "dark"));
   const [terminalTheme, setTerminalTheme] = useState(savedTerminalTheme);
+  /** Set on the first click, so the switch's stretch animation does not play at startup. */
+  const [themeSwitched, setThemeSwitched] = useState(false);
   const [editorTheme, setEditorTheme] = useState(savedEditorTheme);
   const [git, setGit] = useState<GitStatus | null | undefined>(undefined);
   const [gitBusy, setGitBusy] = useState<string | null>(null);
@@ -144,6 +147,11 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => document.documentElement.style.setProperty("--code-font", fontCss(settings.font)), [settings.font]);
+
+  useEffect(() => void api.pickerSetEnabled(settings.picker).catch(() => undefined), [settings.picker]);
+
+  // Read by the patched xterm WebGL renderer (patches/@xterm__addon-webgl.patch).
+  useEffect(() => void ((globalThis as { __lookoutBlinkMs?: number }).__lookoutBlinkMs = settings.blinkMs), [settings.blinkMs]);
 
   // The editor's syntax colors are CSS variables; set on the root they override styles.css.
   useEffect(() => {
@@ -762,17 +770,18 @@ export default function App() {
     return { icon: <GitCompare size={13} />, text: `${basename(tab.path)}${tab.staged ? " (staged)" : ""}` };
   };
 
-  const activity = (id: Panel, title: string, icon: ReactNode, badge?: number) => (
+  const activity = (id: Panel, title: string, icon: SidebarIconName, badge?: number) => (
     <button
       type="button"
       className={`activity-button${panel === id ? " active" : ""}`}
-      title={title}
+      data-tip={title}
+      aria-label={title}
       onClick={() => {
         setPanel((p) => (p === id ? null : id));
         if (id === "search") setSearchToken((t) => t + 1);
       }}
     >
-      {icon}
+      <SidebarIcon name={icon} filled={panel === id} />
       {!!badge && <span className="activity-badge">{badge > 99 ? "99+" : badge}</span>}
     </button>
   );
@@ -885,7 +894,28 @@ export default function App() {
               })),
               "separator",
               { label: "Blink", checked: settings.cursorBlink, onSelect: () => changeSetting("cursorBlink", !settings.cursorBlink) },
+              "separator",
+              ...BLINK_SPEEDS.map((speed) => ({
+                label: `${speed.label} blinking`,
+                checked: speed.value === settings.blinkMs,
+                disabled: !settings.cursorBlink,
+                onSelect: () => changeSetting("blinkMs", speed.value),
+              })),
             ],
+          },
+        },
+        {
+          label: "Key repeat",
+          icon: <Keyboard size={14} />,
+          detail: KEY_REPEAT[settings.keyRepeat].label,
+          submenu: {
+            title: "Key repeat",
+            note: "How fast ⌫, Delete, ← and → repeat in the terminal while held.",
+            items: (["fast", "faster", "system"] as const).map((speed) => ({
+              label: KEY_REPEAT[speed].label,
+              checked: speed === settings.keyRepeat,
+              onSelect: () => changeSetting("keyRepeat", speed),
+            })),
           },
         },
         {
@@ -923,6 +953,13 @@ export default function App() {
           },
         },
         "separator",
+        {
+          label: "Element picker",
+          icon: <SidebarIcon name="pick" size={14} />,
+          detail: "⌥⌘E",
+          checked: settings.picker,
+          onSelect: () => changeSetting("picker", !settings.picker),
+        },
         {
           label: "Word wrap in editor",
           icon: <TextWrap size={14} />,
@@ -1037,47 +1074,60 @@ export default function App() {
             type="button"
             role="switch"
             aria-checked={theme === "dark"}
-            className={`theme-switch ${theme}`}
+            className={`theme-switch ${theme}${themeSwitched ? " switched" : ""}`}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            onClick={() => {
+              setThemeSwitched(true);
+              setTheme((t) => (t === "dark" ? "light" : "dark"));
+            }}
           >
             <span className="theme-thumb" />
             <span className="theme-option sun">
-              <Sun size={12} />
+              <Sun size={15} strokeWidth={1.9} />
             </span>
             <span className="theme-option moon">
-              <Moon size={12} />
+              <Moon size={12.5} strokeWidth={1.9} />
             </span>
           </button>
         </div>
       </header>
 
       <nav className="activity-bar">
-        {activity("files", "Files (⇧⌘E)", <Codicon name="files" />)}
-        {activity("search", "Search (⇧⌘F)", <Codicon name="search" />)}
-        {activity("git", "Source Control (⌃⇧G)", <Codicon name="source-control" />, changeCount)}
-        <span className="activity-divider" />
-        <button type="button" className="activity-button" title="Pick an element anywhere on screen for Claude (⌥⌘E)" onClick={() => void api.pickerStart()}>
-          <Codicon name="inspect" />
-        </button>
+        <div className="activity-group">
+          {activity("files", "Files (⇧⌘E)", "files")}
+          {activity("search", "Search (⇧⌘F)", "search")}
+          {activity("git", "Source Control (⌃⇧G)", "git", changeCount)}
+        </div>
+        {settings.picker && (
+          <button
+            type="button"
+            className="activity-button activity-pick"
+            data-tip="Pick an element on screen (⌥⌘E)" aria-label="Pick an element on screen (⌥⌘E)"
+            onClick={() => void api.pickerStart()}
+          >
+            <SidebarIcon name="pick" />
+          </button>
+        )}
         <span className="activity-spacer" />
-        <button type="button" className="activity-button" title="Open a project" onClick={projectMenu}>
-          <Codicon name="folder-opened" />
-        </button>
-        <button type="button" className="activity-button" title="Settings" onClick={settingsMenu}>
-          <Codicon name="settings-gear" />
-        </button>
-        <button
-          type="button"
-          className="activity-button activity-toggle"
-          title={compact ? "Expand sidebar" : "Minimize sidebar"}
-          onClick={() => {
-            setCompact(!compact);
-            localStorage.setItem(COMPACT_KEY, compact ? "0" : "1");
-          }}
-        >
-          <Codicon name={compact ? "layout-sidebar-left-off" : "layout-sidebar-left"} />
-        </button>
+        <div className="activity-group">
+          <button type="button" className="activity-button" data-tip="Open a project" aria-label="Open a project" onClick={projectMenu}>
+            <SidebarIcon name="folder" />
+          </button>
+          <button type="button" className="activity-button" data-tip="Settings" aria-label="Settings" onClick={settingsMenu}>
+            <SidebarIcon name="settings" />
+          </button>
+          <button
+            type="button"
+            className="activity-button"
+            data-tip={compact ? "Expand sidebar" : "Minimize sidebar"} aria-label={compact ? "Expand sidebar" : "Minimize sidebar"}
+            onClick={() => {
+              setCompact(!compact);
+              localStorage.setItem(COMPACT_KEY, compact ? "0" : "1");
+            }}
+          >
+            <SidebarIcon name="sidebar" />
+          </button>
+        </div>
       </nav>
 
       <aside className="side-panel">

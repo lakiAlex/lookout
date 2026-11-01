@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Dog, RefreshCw, X } from "lucide-react";
+import { Dog, RefreshCw, X } from "./icons";
 import { useCallback, useEffect, useState } from "react";
 
 /** Subreddits to pick from; meme-api.com serves a random post from one. */

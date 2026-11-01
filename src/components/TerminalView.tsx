@@ -7,10 +7,10 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronUp, X } from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { fontCss, type Settings } from "../lib/settings";
+import { fontCss, KEY_REPEAT, type Settings } from "../lib/settings";
 import { terminalColors } from "../lib/terminalThemes";
 import type { Theme } from "../lib/theme";
 
@@ -96,8 +96,39 @@ export function TerminalView(props: TerminalViewProps) {
       if (sessionRef.current) void api.ptyWrite(sessionRef.current, data);
     };
 
+    // Held ⌫, Delete, ← and → repeat at the speed from Settings instead of the macOS rate.
+    let repeatTimer = 0;
+    const stopRepeat = () => window.clearTimeout(repeatTimer);
+    const repeatSequence = (e: KeyboardEvent): string | null => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return null;
+      const app = term.modes.applicationCursorKeysMode;
+      const plain: Record<string, string> = { Backspace: "\x7f", Delete: "\x1b[3~", ArrowLeft: app ? "\x1bOD" : "\x1b[D", ArrowRight: app ? "\x1bOC" : "\x1b[C" };
+      const option: Record<string, string> = { Backspace: "\x17", ArrowLeft: "\x1bb", ArrowRight: "\x1bf" };
+      return (e.altKey ? option[e.key] : plain[e.key]) ?? null;
+    };
+    containerRef.current!.addEventListener("focusout", stopRepeat);
+
     term.attachCustomKeyEventHandler((e) => {
+      const repeat = KEY_REPEAT[latest.current.settings.keyRepeat];
+      const sequence = repeat.interval ? repeatSequence(e) : null;
+      if (e.type === "keyup") {
+        if (sequence !== null || ["Backspace", "Delete", "ArrowLeft", "ArrowRight"].includes(e.key)) stopRepeat();
+        return true;
+      }
       if (e.type !== "keydown") return true;
+      if (sequence !== null) {
+        if (!e.repeat) {
+          stopRepeat();
+          send(sequence);
+          const tick = () => {
+            send(sequence);
+            repeatTimer = window.setTimeout(tick, repeat.interval);
+          };
+          repeatTimer = window.setTimeout(tick, repeat.delay);
+        }
+        return false;
+      }
+      stopRepeat();
       // Shift+Return is a new line in Claude Code's prompt (what its /terminal-setup configures).
       if (e.key === "Enter" && e.shiftKey && !e.metaKey && !e.ctrlKey) {
         send("\x1b\r");
@@ -125,6 +156,18 @@ export function TerminalView(props: TerminalViewProps) {
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = (data) => term.write(new Uint8Array(data));
     term.onData(send);
+    // Show the scrollbar while the user scrolls, then let it fade out.
+    let scrollTimer = 0;
+    const view = containerRef.current!.closest(".terminal-view");
+    containerRef.current!.addEventListener(
+      "wheel",
+      () => {
+        view?.classList.add("scrolling");
+        window.clearTimeout(scrollTimer);
+        scrollTimer = window.setTimeout(() => view?.classList.remove("scrolling"), 1000);
+      },
+      { passive: true },
+    );
     term.onSelectionChange(() => {
       if (latest.current.settings.copyOnSelect && term.hasSelection()) void api.copyText(term.getSelection());
     });

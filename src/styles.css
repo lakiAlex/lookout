@@ -100,12 +100,12 @@ input[type="checkbox"] {
 @property --bar-w {
   syntax: "<length>";
   inherits: true;
-  initial-value: 48px;
+  initial-value: 54px;
 }
 
 .app {
   display: grid;
-  --bar-w: 48px;
+  --bar-w: 54px;
   transition: --bar-w 0.24s cubic-bezier(0.2, 0, 0, 1);
   grid-template-columns: var(--bar-w) var(--side-w) minmax(0, 1fr);
   grid-template-rows: 38px minmax(0, 1fr);
@@ -222,6 +222,11 @@ input[type="checkbox"] {
   color: var(--fg-strong);
 }
 
+/* The same pill as the open panel's icon in the sidebar. */
+:root:not([data-theme="light"]) .tab.active {
+  background: rgba(255, 255, 255, 0.075);
+}
+
 .tab.preview .tab-text {
   font-style: italic;
 }
@@ -324,60 +329,151 @@ input[type="checkbox"] {
 
 /* ---- Activity bar and side panel ---- */
 
-/* Like VS Code's activity bar: full-width buttons, 24px icons, and a line on
-   the left edge for the open panel. */
+/* The sidebar: rounded groups of icon buttons, with a raised pill behind the
+   open panel's icon, and the picker as its own orange button. */
 .activity-bar {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  padding: 4px 0 6px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 10px 6px;
   background: var(--chrome);
+}
+
+.activity-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+}
+
+/* Darker than the tab bar's groups in dark mode, so the sidebar stays quiet. */
+:root:not([data-theme="light"]) .activity-group {
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+}
+
+:root:not([data-theme="light"]) .activity-button.active {
+  background: rgba(255, 255, 255, 0.075);
 }
 
 .activity-button {
   position: relative;
   display: grid;
   place-items: center;
-  height: 48px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border: none;
+  border-radius: 9px;
   background: none;
   color: var(--fg-3);
 }
 
 .activity-button:hover {
   color: var(--fg-strong);
+  background: var(--hover);
 }
 
 .activity-button.active {
   color: var(--fg-strong);
-}
-
-.activity-button.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--fg-strong);
+  background: var(--raised);
+  box-shadow: var(--raised-shadow);
 }
 
 .activity-button svg {
-  width: 24px;
-  height: 24px;
-}
-
-.activity-toggle {
-  height: 40px;
-}
-
-.activity-toggle svg {
   width: 20px;
   height: 20px;
 }
 
-/* A smaller light/dark switch than the base style. */
+/* The picker: its own button with the groups' look, grey like the other icons until hovered. */
+.activity-pick {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--fg-3);
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+}
+
+:root:not([data-theme="light"]) .activity-pick {
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+}
+
+.activity-pick:hover {
+  color: var(--fg-strong);
+}
+
+.activity-pick:active {
+  transform: scale(0.94);
+}
+
+.activity-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.activity-spacer {
+  flex: 1;
+}
+
+/* Sidebar tooltips: a pill that slides in next to the icon, quicker than the system tooltip. */
+.activity-bar {
+  position: relative;
+  z-index: 30;
+}
+
+.activity-button[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg) 9%, var(--chrome));
+  box-shadow: var(--shadow-menu);
+  color: var(--fg-strong);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-6px, -50%) scale(0.94);
+  transform-origin: left center;
+  transition:
+    opacity 0.1s ease,
+    transform 0.1s ease;
+}
+
+.activity-button[data-tip]:hover::after {
+  opacity: 1;
+  transform: translate(0, -50%) scale(1);
+  transition:
+    opacity 0.14s ease 0.1s,
+    transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.1s;
+}
+
+body:has(.context-menu) .activity-button[data-tip]::after {
+  opacity: 0 !important;
+}
+
+/* A smaller light/dark switch than the base style, with larger icons. */
 .theme-switch {
   padding: 2px;
 }
@@ -385,45 +481,50 @@ input[type="checkbox"] {
 .theme-thumb {
   top: 2px;
   left: 2px;
-  width: 22px;
-  height: 18px;
+  width: 25px;
+  height: 19px;
+  transform-origin: left center;
 }
 
 .theme-switch.dark .theme-thumb {
-  transform: translateX(22px);
+  transform: translateX(25px);
 }
 
 .theme-option {
-  width: 22px;
-  height: 18px;
+  width: 25px;
+  height: 19px;
 }
 
-.activity-badge {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 16px;
-  text-align: center;
+/* On a click the knob stretches toward the other side, then settles with a small bounce. */
+.theme-switch.switched.dark .theme-thumb {
+  animation: thumb-to-dark 0.42s cubic-bezier(0.3, 0.7, 0.4, 1);
 }
 
-.activity-divider {
-  align-self: center;
-  width: 24px;
-  height: 1px;
-  margin: 2px 0 4px;
-  background: var(--border);
+.theme-switch.switched.light .theme-thumb {
+  animation: thumb-to-light 0.42s cubic-bezier(0.3, 0.7, 0.4, 1);
 }
 
-.activity-spacer {
-  flex: 1;
+@keyframes thumb-to-dark {
+  0% { transform: translateX(0) scaleX(1); }
+  40% { transform: translateX(4px) scaleX(1.6); }
+  75% { transform: translateX(27px) scaleX(0.94); }
+  100% { transform: translateX(25px) scaleX(1); }
+}
+
+@keyframes thumb-to-light {
+  0% { transform: translateX(25px) scaleX(1); }
+  40% { transform: translateX(6px) scaleX(1.6); }
+  75% { transform: translateX(-2px) scaleX(0.94); }
+  100% { transform: translateX(0) scaleX(1); }
+}
+
+/* The base style shrinks the inactive icon to 80%, too small at this size. */
+.theme-switch.dark .sun svg {
+  transform: rotate(-90deg) scale(0.92);
+}
+
+.theme-switch.light .moon svg {
+  transform: rotate(45deg) scale(0.92);
 }
 
 .side-panel {
@@ -915,11 +1016,28 @@ input[type="checkbox"] {
   min-height: 0;
 }
 
+/* xterm draws its own scrollbar; the viewport's native one stays hidden. */
 .xterm .xterm-viewport {
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  display: none;
 }
 
 /* xterm paints this black; the terminal is transparent over .terminal-view. */
+/* The terminal's scrollbar shows only while scrolling (TerminalView sets .scrolling). */
+.terminal-view .xterm .scrollbar {
+  opacity: 0 !important;
+  transition: opacity 0.4s ease !important;
+}
+
+.terminal-view.scrolling .xterm .scrollbar,
+.terminal-view .xterm .scrollbar:active {
+  opacity: 1 !important;
+  transition: opacity 0.1s ease !important;
+}
+
 .terminal-view .xterm .xterm-viewport {
   background-color: transparent !important;
 }
@@ -1330,50 +1448,68 @@ input[type="checkbox"] {
 
 /* Minimized: a narrow bar with small icons. Sizes animate between the two. */
 .app.compact {
-  --bar-w: 28px;
+  --bar-w: 36px;
 }
 
+.activity-bar,
+.activity-group,
 .activity-button,
 .activity-button svg,
-.activity-divider,
 .activity-badge {
   transition-duration: 0.24s;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
-.activity-button {
-  transition-property: height, color;
+.activity-bar {
+  transition-property: gap, padding;
 }
 
-.activity-button svg,
-.activity-divider {
+.activity-group {
+  transition-property: padding, border-radius;
+}
+
+.activity-button {
+  transition-property: width, height, border-radius, background-color, color, transform;
+}
+
+.activity-button svg {
   transition-property: width, height;
 }
 
 .activity-badge {
-  transition-property: right, bottom, min-width, height, padding, border-radius, font-size, line-height;
+  transition-property: top, right, min-width, height, padding, border-radius, font-size, line-height;
+}
+
+.app.compact .activity-bar {
+  gap: 6px;
+  padding: 6px 0 6px 4px;
+}
+
+.app.compact .activity-group {
+  padding: 2px;
+  border-radius: 9px;
 }
 
 .app.compact .activity-button {
-  height: 28px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
 }
 
-.app.compact .activity-toggle {
-  height: 26px;
+.app.compact .activity-pick {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
 }
 
 .app.compact .activity-button svg {
-  width: 14px;
-  height: 14px;
-}
-
-.app.compact .activity-divider {
-  width: 14px;
+  width: 15px;
+  height: 15px;
 }
 
 .app.compact .activity-badge {
-  right: 1px;
-  bottom: 1px;
+  top: -3px;
+  right: -3px;
   min-width: 12px;
   height: 12px;
   padding: 0 3px;
@@ -1394,12 +1530,19 @@ input[type="checkbox"] {
   width: 38px;
   height: 38px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: none;
   border-radius: 50%;
-  background: #000;
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  /* The sidebar's group look: its color with the same light tint and ring. */
+  background: linear-gradient(var(--group-bg), var(--group-bg)), var(--chrome);
+  color: var(--fg-2);
+  box-shadow: var(--group-ring), 0 4px 14px rgba(0, 0, 0, 0.3);
   transition: transform 0.15s cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+
+/* Dark mode uses the sidebar's darker group tint. */
+:root:not([data-theme="light"]) .meme-button {
+  background: linear-gradient(rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.025)), var(--chrome);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045), 0 4px 14px rgba(0, 0, 0, 0.3);
 }
 
 .meme-button:hover {

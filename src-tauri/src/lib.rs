@@ -21,6 +21,8 @@ use search::{SearchOptions, SearchResult, SearchState};
 struct AppState {
     sessions: Sessions,
     picker: picker::Picker,
+    /// Off in Settings: the ⌥⌘E shortcut does nothing.
+    picker_enabled: std::sync::atomic::AtomicBool,
     search: SearchState,
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
     recent_path: PathBuf,
@@ -70,6 +72,9 @@ fn toggle_picker(app: &AppHandle) {
         state.picker.cancel();
         return;
     }
+    if !state.picker_enabled.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
     if let Err(e) = state.picker.start(app.clone()) {
         let _ = app.emit("picker-error", picker::PickerError { code: e.code, message: e.message });
     }
@@ -95,6 +100,11 @@ fn open_accessibility_settings() {
 #[tauri::command]
 fn picker_start(app: AppHandle) {
     toggle_picker(&app);
+}
+
+#[tauri::command]
+fn picker_set_enabled(state: State<AppState>, enabled: bool) {
+    state.picker_enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
 }
 
 #[tauri::command]
@@ -274,6 +284,7 @@ pub fn run() {
             app.manage(AppState {
                 sessions: Sessions::default(),
                 picker: picker::Picker::default(),
+                picker_enabled: std::sync::atomic::AtomicBool::new(true),
                 search: SearchState::default(),
                 watcher: Mutex::new(None),
                 recent_path: dir.join("recent-folders.json"),
@@ -291,6 +302,7 @@ pub fn run() {
             picker_cancel,
             picker_permission,
             open_accessibility_settings,
+            picker_set_enabled,
             copy_text,
             pty_spawn,
             pty_write,

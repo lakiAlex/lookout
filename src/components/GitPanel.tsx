@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, LoaderCircle, Minus, Plus, RefreshCw, Undo2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, LoaderCircle, Minus, Plus, RefreshCw, Undo2 } from "./icons";
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import { basename, dirname, type GitFile, type GitStatus } from "../api";
 import { iconUrl } from "../icons";

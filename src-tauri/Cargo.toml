@@ -1,6 +1,6 @@
 [package]
 name = "lookout"
-version = "1.0.0"
+version = "1.1.0"
 description = "Terminal for Claude Code, with files, search, git and an element picker"
 authors = []
 edition = "2024"

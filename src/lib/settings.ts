@@ -3,6 +3,10 @@
 export interface Settings {
   cursorStyle: "underline" | "bar" | "block";
   cursorBlink: boolean;
+  /** Milliseconds the blinking cursor stays on and off. */
+  blinkMs: number;
+  /** How fast held ⌫, Delete, ← and → repeat in the terminal; "system" uses the macOS setting. */
+  keyRepeat: "system" | "fast" | "faster";
   /** An id from FONTS. */
   font: string;
   lineHeight: number;
@@ -11,17 +15,22 @@ export interface Settings {
   copyOnSelect: boolean;
   scrollback: number;
   wordWrap: boolean;
+  /** The element picker: its sidebar button and the ⌥⌘E shortcut. */
+  picker: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   cursorStyle: "underline",
   cursorBlink: true,
+  blinkMs: 600,
+  keyRepeat: "fast",
   font: "sf-mono",
   lineHeight: 1.2,
   optionIsMeta: false,
   copyOnSelect: false,
   scrollback: 10000,
   wordWrap: false,
+  picker: true,
 };
 
 const KEY = "lookout.settings";
@@ -90,3 +99,16 @@ export const LINE_HEIGHTS = [
 ];
 
 export const SCROLLBACK = [1000, 10000, 50000];
+
+export const BLINK_SPEEDS = [
+  { value: 900, label: "Slow" },
+  { value: 600, label: "Normal" },
+  { value: 350, label: "Fast" },
+];
+
+/** First repeat after `delay` ms, then one every `interval` ms. */
+export const KEY_REPEAT = {
+  fast: { label: "Fast", delay: 220, interval: 28 },
+  faster: { label: "Very fast", delay: 160, interval: 14 },
+  system: { label: "macOS setting", delay: 0, interval: 0 },
+} as const;

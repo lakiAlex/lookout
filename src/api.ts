@@ -93,6 +93,7 @@ export function toAppError(e: unknown): AppError {
 export const api = {
   pickerStart: () => invoke<void>("picker_start"),
   pickerCancel: () => invoke<void>("picker_cancel"),
+  pickerSetEnabled: (enabled: boolean) => invoke<void>("picker_set_enabled", { enabled }),
   pickerPermission: () => invoke<boolean>("picker_permission"),
   openAccessibilitySettings: () => invoke<void>("open_accessibility_settings"),
   copyText: (text: string) => invoke<void>("copy_text", { text }),

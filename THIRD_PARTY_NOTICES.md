@@ -12,9 +12,9 @@ The palettes in `src/lib/terminalThemes.ts` come from iTerm2-Color-Schemes (MIT 
 
 The syntax colors in `src/lib/editorThemes.ts` were taken from the theme files in the tm-themes package (MIT License), which collects the VS Code themes of their authors. https://github.com/shikijs/textmate-grammars-themes
 
-## Codicons
+## Hugeicons
 
-The sidebar icons in `src/components/Codicon.tsx` are path data from Codicons by Microsoft, licensed under the Creative Commons Attribution 4.0 International License (CC BY 4.0). https://github.com/microsoft/vscode-codicons
+The icons come from the free Hugeicons set, stroke-rounded style, through `@hugeicons/react` and `@hugeicons/core-free-icons` (MIT License). https://hugeicons.com
 
 ## xterm.js WebGL renderer
 

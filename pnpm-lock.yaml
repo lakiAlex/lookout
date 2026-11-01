@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@xterm/addon-webgl':
-    hash: egs22h2jadctxotrkpvquyblfe
+    hash: 7bhaacsovjrgk3bghfsqngz3fm
     path: patches/@xterm__addon-webgl.patch
 
 importers:
@@ -37,6 +37,12 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.15
         version: 6.43.15
+      '@hugeicons/core-free-icons':
+        specifier: ^4.4.0
+        version: 4.4.0
+      '@hugeicons/react':
+        specifier: ^1.1.10
+        version: 1.1.10(react@19.3.1)
       '@lezer/highlight':
         specifier: ^1.2.5
         version: 1.2.5
@@ -66,7 +72,7 @@ importers:
         version: 0.12.0
       '@xterm/addon-webgl':
         specifier: ^0.19.0
-        version: 0.19.0(patch_hash=egs22h2jadctxotrkpvquyblfe)
+        version: 0.19.0(patch_hash=7bhaacsovjrgk3bghfsqngz3fm)
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
@@ -199,6 +205,14 @@ packages:
 
   '@codemirror/view@6.43.15':
     resolution: {integrity: sha512-HHsfpqFeHyXLs983pSRe38Xajs0vFWZQ2BuX0m7Ki8w3jZ5iD8cuR3lBz2/5/X53Dhf32SBHKh6rtSTB6tKeGw==}
+
+  '@hugeicons/core-free-icons@4.4.0':
+    resolution: {integrity: sha512-7Mz8bmGoY6tZ6l3C2TXwNMLVSr0I8HPwjjFIERAuJFj3rWwLxdF2ZLkDqdrVuEE1dx5b/VXyIsP4WoSU6Q40KQ==}
+
+  '@hugeicons/react@1.1.10':
+    resolution: {integrity: sha512-9tAsd92yMVVGP+E+d8cM+wc0VnXuYZHNbWQi7TOe8k2neawmhiaFmVFbzyruejhOMa197/LbgvSED32ayUo3ZA==}
+    peerDependencies:
+      react: '>=16.0.0'
 
   '@lezer/common@1.5.5':
     resolution: {integrity: sha512-Pw7PVCndruF1pb3ebCxpSVpkMHSDjwRCLcTRw+RizUKco5QbWylwq2g4lnG/RYN7yTTQDXE9F77MwtkAyphrjg==}
@@ -940,6 +954,12 @@ snapshots:
       style-mod: 4.1.4
       w3c-keyname: 2.2.8
 
+  '@hugeicons/core-free-icons@4.4.0': {}
+
+  '@hugeicons/react@1.1.10(react@19.3.1)':
+    dependencies:
+      react: 19.3.1
+
   '@lezer/common@1.5.5': {}
 
   '@lezer/cpp@1.1.6':
@@ -1166,7 +1186,7 @@ snapshots:
 
   '@xterm/addon-web-links@0.12.0': {}
 
-  '@xterm/addon-webgl@0.19.0(patch_hash=egs22h2jadctxotrkpvquyblfe)': {}
+  '@xterm/addon-webgl@0.19.0(patch_hash=7bhaacsovjrgk3bghfsqngz3fm)': {}
 
   '@xterm/xterm@6.0.0': {}
 

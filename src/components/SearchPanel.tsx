@@ -1,4 +1,4 @@
-import { CaseSensitive, ChevronRight, Ellipsis, LoaderCircle, Regex, WholeWord, X } from "lucide-react";
+import { CaseSensitive, ChevronRight, Ellipsis, LoaderCircle, Regex, WholeWord, X } from "./icons";
 import { useEffect, useRef, useState } from "react";
 import { api, basename, dirname, toAppError, type SearchOptions, type SearchResult } from "../api";
 import { iconUrl } from "../icons";

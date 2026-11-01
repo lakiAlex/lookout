@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { ChevronRight, FilePlus2, FolderPlus, ListCollapse, RefreshCw } from "lucide-react";
+import { ChevronRight, FilePlus2, FolderPlus, ListCollapse, RefreshCw } from "./icons";
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { api, basename, dirname, relative, toAppError, type Entry } from "../api";
 import { iconUrl } from "../icons";

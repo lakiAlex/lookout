@@ -1,4 +1,4 @@
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight } from "./icons";
 import { useLayoutEffect, useEffect, useRef, useState, type ReactNode } from "react";
 
 export interface MenuItem {

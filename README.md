@@ -2,7 +2,7 @@
 
 Lookout is a terminal for macOS for working with Claude Code. It has a file explorer, search, source control and an editor in a sidebar like VS Code, and a picker that sends any element on screen, in any app, to Claude.
 
-![Lookout with a Claude Code session: Claude explains a button picked in Chrome and changes its label, the Files panel shows the project with git changes, and three picks sit in the strip under the terminal](docs/screenshot.png)
+![Lookout in use: an element picked in Chrome is pasted into Claude Code, Claude answers and edits the code, then the Files and Source Control panels, light mode and the settings menu](docs/demo.gif)
 
 It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sessions, files, search, git and the macOS Accessibility calls behind the picker, and a React frontend with [xterm.js](https://xtermjs.org) for the terminal and [CodeMirror](https://codemirror.net) for the editor. The app is about 18 MB, 7.5 MB as a download.
 
@@ -46,7 +46,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 **Settings**
 
 - Light and dark mode in the top bar.
-- The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), font (SF Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), font size, line spacing, terminal cursor (underline, bar or block, blinking or not), the Option key as Meta, copy on select, scrollback length, word wrap in the editor, and memes.
+- The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), font (SF Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, scrollback length, the element picker on or off, word wrap in the editor, and memes.
 - The sidebar minimizes to a narrow strip with small icons.
 - The dog button in the corner shows a random meme from Reddit through [meme-api.com](https://github.com/D3vd/Meme_Api), skipping posts marked NSFW. Settings > Memes turns it off.
 
@@ -134,9 +134,9 @@ cargo test
 | [ignore, grep-searcher, grep-regex](https://github.com/BurntSushi/ripgrep) | Search and the file list | MIT or Unlicense |
 | [notify](https://github.com/notify-rs/notify) | Watching files | CC0-1.0 |
 | [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting) | Command highlighting in zsh | BSD-3-Clause |
-| [Codicons](https://github.com/microsoft/vscode-codicons) | Sidebar icons | CC BY 4.0 |
 | [Icons - Maintained](https://github.com/yusifaliyevpro/vscode-icons) | File icons in the explorer and tabs | MIT |
-| [Lucide](https://lucide.dev) | Other icons | ISC |
+| [Hugeicons](https://hugeicons.com) | Icons | MIT |
+| [Lucide](https://lucide.dev) | The dog and the title bar glyph | ISC |
 | [iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes) | Terminal theme colors | MIT |
 | [tm-themes](https://github.com/shikijs/textmate-grammars-themes) | Editor theme colors | MIT |
 
