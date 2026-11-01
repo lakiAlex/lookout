@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Lookout highlight</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      .box {
+        position: absolute;
+        inset: 1px;
+        border: 2px solid #ff9f0a;
+        border-radius: 4px;
+        background: rgba(255, 159, 10, 0.12);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+      }
+      .label {
+        position: absolute;
+        left: 4px;
+        top: 4px;
+        max-width: calc(100% - 8px);
+        padding: 2px 7px;
+        border-radius: 5px;
+        background: #ff9f0a;
+        color: #1d1d1f;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box"><div class="label" id="label"></div></div>
+    <script>
+      window.setLabel = (text) => {
+        document.getElementById("label").textContent = text;
+      };
+    </script>
+  </body>
+</html>
