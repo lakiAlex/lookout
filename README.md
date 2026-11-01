@@ -1,4 +1,8 @@
-# Lookout
+<p align="center">
+  <img src="docs/icon.png" width="128" height="128" alt="Lookout app icon">
+</p>
+
+<h1 align="center">Lookout</h1>
 
 Lookout is a terminal for macOS for working with Claude Code. It has a file explorer, search, source control and an editor in a sidebar like VS Code, and a picker that sends any element on screen, in any app, to Claude.
 
