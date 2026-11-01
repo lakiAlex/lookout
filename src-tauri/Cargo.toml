@@ -1,0 +1,42 @@
+[package]
+name = "lookout"
+version = "1.0.0"
+description = "Terminal for Claude Code, with files, search, git and an element picker"
+authors = []
+edition = "2024"
+
+# The program file is named like the app, so the Dock shows "Lookout" in development too.
+[[bin]]
+name = "Lookout"
+path = "src/main.rs"
+
+[lib]
+name = "lookout_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api", "protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+portable-pty = "0.9.0"
+notify = "8.2.1"
+ignore = "0.4.34"
+grep-searcher = "0.1.17"
+grep-regex = "0.1.14"
+grep-matcher = "0.1.9"
+libproc = "0.14.11"
+dirs = "7.0.0"
+trash = "5.2.9"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["full"] }
+uuid = { version = "1.29.0", features = ["v4"] }
+core-foundation = "0.10"
+core-foundation-sys = "0.8.7"
+core-graphics = "0.25"
+tauri-plugin-global-shortcut = "2"
