@@ -1,0 +1,1492 @@
+@import "./styles-base.css";
+
+/* ---- Tokens ---- */
+
+/* Accent colors: Neutral (white in dark mode, black in light mode) and the macOS system colors. */
+:root {
+  --accent: #ffffff;
+  --on-accent: #0a0a0a;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --focus: var(--accent);
+  --ring: color-mix(in srgb, var(--accent) 30%, transparent);
+  /* The top bar, the sidebar and the terminal share this color, so they read as one surface.
+     The terminal's copy is BACKGROUND in lib/terminalThemes.ts. */
+  --chrome: #080808;
+  --group-bg: rgba(255, 255, 255, 0.05);
+  --group-ring: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --raised: rgba(255, 255, 255, 0.11);
+  --raised-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --claude: #d97757;
+
+  /* Git colors, as in VS Code. */
+  --git-modified: #e2c08d;
+  --git-added: #73c991;
+  --git-deleted: #e06c6c;
+  --git-conflict: #e4676b;
+  --git-renamed: #73c991;
+
+  --editor-selection: rgba(122, 162, 247, 0.28);
+  --editor-active-line: rgba(255, 255, 255, 0.035);
+  --editor-bracket: rgba(255, 255, 255, 0.12);
+  --editor-match: rgba(255, 255, 255, 0.08);
+  --editor-search: rgba(224, 175, 104, 0.25);
+  --editor-search-border: rgba(224, 175, 104, 0.5);
+  --editor-search-active: rgba(224, 175, 104, 0.5);
+
+  /* Tokyo Night */
+  --syn-keyword: #bb9af7;
+  --syn-string: #9ece6a;
+  --syn-number: #ff9e64;
+  --syn-comment: #5f6890;
+  --syn-function: #7aa2f7;
+  --syn-type: #2ac3de;
+  --syn-property: #73daca;
+  --syn-tag: #f7768e;
+  --syn-variable: #c0caf5;
+  --syn-punctuation: #89ddff;
+}
+
+:root[data-theme="light"] {
+  --accent: #000000;
+  --on-accent: #ffffff;
+  --chrome: #f7f7f9;
+  --group-bg: rgba(0, 0, 0, 0.05);
+  --group-ring: inset 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --raised: #ffffff;
+  --raised-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  --git-modified: #895503;
+  --git-added: #388a34;
+  --git-deleted: #ad0707;
+  --git-conflict: #ad0707;
+  --git-renamed: #007100;
+  --editor-selection: rgba(46, 125, 233, 0.2);
+  --editor-active-line: rgba(0, 0, 0, 0.035);
+  --editor-bracket: rgba(0, 0, 0, 0.1);
+  --editor-match: rgba(0, 0, 0, 0.07);
+  --editor-search: rgba(255, 200, 0, 0.3);
+  --editor-search-border: rgba(200, 150, 0, 0.6);
+  --editor-search-active: rgba(255, 160, 0, 0.45);
+
+  /* Tokyo Night Day */
+  --syn-keyword: #9854f1;
+  --syn-string: #587539;
+  --syn-number: #b15c00;
+  --syn-comment: #848cb5;
+  --syn-function: #2e7de9;
+  --syn-type: #007197;
+  --syn-property: #118c74;
+  --syn-tag: #f52a65;
+  --syn-variable: #3760bf;
+  --syn-punctuation: #006a83;
+}
+
+html,
+body {
+  background: transparent;
+}
+
+body.col-resizing,
+body.col-resizing * {
+  cursor: col-resize !important;
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* ---- Layout ---- */
+
+/* Registered so the sidebar width can animate between normal and minimized. */
+@property --bar-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 48px;
+}
+
+.app {
+  display: grid;
+  --bar-w: 48px;
+  transition: --bar-w 0.24s cubic-bezier(0.2, 0, 0, 1);
+  grid-template-columns: var(--bar-w) var(--side-w) minmax(0, 1fr);
+  grid-template-rows: 38px minmax(0, 1fr);
+  height: 100vh;
+}
+
+.titlebar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  background: var(--chrome);
+}
+
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: calc(var(--bar-w) + var(--side-w));
+  max-width: 46vw;
+  height: 100%;
+  padding: 0 12px 0 86px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-strong);
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.titlebar-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.titlebar-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 5px;
+  background: var(--group-bg);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  flex-shrink: 0;
+}
+
+/* ---- Tabs ---- */
+
+.tabs {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  max-width: 220px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.tab:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.tab.active {
+  background: var(--raised);
+  box-shadow: var(--raised-shadow);
+  color: var(--fg-strong);
+}
+
+.tab.preview .tab-text {
+  font-style: italic;
+}
+
+.tab-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.tab-file-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.claude-icon {
+  color: var(--claude);
+}
+
+.tab-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-close {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+
+.tab-close svg {
+  visibility: hidden;
+}
+
+.tab:hover .tab-close svg,
+.tab.active .tab-close svg {
+  visibility: visible;
+}
+
+.tab-close:hover {
+  background: var(--press);
+  color: var(--fg-strong);
+}
+
+.tab-dot {
+  display: none;
+}
+
+.tab-close.dirty .tab-dot {
+  display: block;
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-2);
+}
+
+.tab-close.dirty svg {
+  visibility: hidden !important;
+}
+
+.tab-close.dirty:hover .tab-dot {
+  display: none;
+}
+
+.tab-close.dirty:hover svg {
+  visibility: visible !important;
+}
+
+.tab-new {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+
+.tab-new:hover {
+  background: var(--hover);
+  color: var(--fg-strong);
+}
+
+.tab-new.claude:hover {
+  color: var(--claude);
+}
+
+/* ---- Activity bar and side panel ---- */
+
+/* Like VS Code's activity bar: full-width buttons, 24px icons, and a line on
+   the left edge for the open panel. */
+.activity-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 4px 0 6px;
+  background: var(--chrome);
+}
+
+.activity-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 48px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg-3);
+}
+
+.activity-button:hover {
+  color: var(--fg-strong);
+}
+
+.activity-button.active {
+  color: var(--fg-strong);
+}
+
+.activity-button.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--fg-strong);
+}
+
+.activity-button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.activity-toggle {
+  height: 40px;
+}
+
+.activity-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* A smaller light/dark switch than the base style. */
+.theme-switch {
+  padding: 2px;
+}
+
+.theme-thumb {
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 18px;
+}
+
+.theme-switch.dark .theme-thumb {
+  transform: translateX(22px);
+}
+
+.theme-option {
+  width: 22px;
+  height: 18px;
+}
+
+.activity-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.activity-divider {
+  align-self: center;
+  width: 24px;
+  height: 1px;
+  margin: 2px 0 4px;
+  background: var(--border);
+}
+
+.activity-spacer {
+  flex: 1;
+}
+
+.side-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--chrome);
+}
+
+.side-resize {
+  position: absolute;
+  top: 0;
+  right: -1px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 8px 0 16px;
+  flex-shrink: 0;
+}
+
+.panel-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 1px;
+}
+
+.panel-actions .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.icon-button.on {
+  background: var(--press);
+  color: var(--fg-strong);
+}
+
+.panel-empty {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+
+/* ---- File tree ---- */
+
+.tree {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: 16px;
+}
+
+.tree-row,
+.result-file,
+.git-row,
+.quick-row,
+.recent-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin: 0 6px;
+  padding-right: 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--fg);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.tree-row:hover,
+.result-file:hover,
+.git-row:hover,
+.recent-folder:hover {
+  background: var(--hover);
+}
+
+.tree-row.selected {
+  background: var(--press);
+}
+
+.tree-row.ignored {
+  opacity: 0.45;
+}
+
+.tree-chevron {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--fg-3);
+}
+
+.tree-chevron svg {
+  transition: transform 0.12s;
+}
+
+.tree-chevron.open svg {
+  transform: rotate(90deg);
+}
+
+.tree-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-name.deleted {
+  text-decoration: line-through;
+}
+
+.tree-mark {
+  margin-left: auto;
+  padding-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tree-input {
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.git-modified .tree-name,
+.git-modified .tree-mark {
+  color: var(--git-modified);
+}
+
+.git-added .tree-name,
+.git-added .tree-mark,
+.git-untracked .tree-name,
+.git-untracked .tree-mark {
+  color: var(--git-added);
+}
+
+.git-deleted .tree-name,
+.git-deleted .tree-mark {
+  color: var(--git-deleted);
+}
+
+.git-conflict .tree-name,
+.git-conflict .tree-mark {
+  color: var(--git-conflict);
+}
+
+.git-renamed .tree-name,
+.git-renamed .tree-mark {
+  color: var(--git-renamed);
+}
+
+.result-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+/* ---- Search ---- */
+
+.search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 6px;
+}
+
+.search-input {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 3px;
+  border-radius: 7px;
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+}
+
+.search-input:focus-within,
+.search-filter:focus {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 5px var(--ring);
+}
+
+.search-input input {
+  height: 28px;
+  border: none;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.search-filter {
+  height: 28px !important;
+  border: none !important;
+  border-radius: 7px !important;
+  background: var(--group-bg) !important;
+  box-shadow: var(--group-ring);
+}
+
+.input-toggle {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+
+.input-toggle:hover {
+  color: var(--fg);
+  background: var(--hover);
+}
+
+.input-toggle.on {
+  color: var(--fg-strong);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 16px 4px;
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.error-text {
+  color: var(--red);
+}
+
+.search-results {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: 16px;
+}
+
+.result-file {
+  padding-left: 4px;
+}
+
+.result-count {
+  margin-left: auto;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--group-bg);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  color: var(--fg-2);
+}
+
+.result-dismiss {
+  display: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--fg-3);
+}
+
+.result-file:hover .result-dismiss {
+  display: grid;
+}
+
+.result-file:hover .result-count {
+  display: none;
+}
+
+.result-line {
+  margin: 0 6px;
+  padding: 2px 8px 2px 40px;
+  border-radius: 5px;
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-2);
+  cursor: default;
+}
+
+.result-line:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.result-line mark {
+  border-radius: 2px;
+  background: var(--editor-search-active);
+  color: inherit;
+}
+
+/* ---- Git ---- */
+
+.git-bar {
+  display: flex;
+  gap: 6px;
+  padding: 0 10px 8px;
+}
+
+.branch-button,
+.sync-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 7px;
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+  font-size: 12.5px;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.branch-button {
+  flex: 1;
+  min-width: 0;
+}
+
+.branch-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-button:hover,
+.sync-button:hover:not(:disabled) {
+  background: var(--press);
+}
+
+.commit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.commit-box textarea {
+  min-height: 62px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+.commit-button {
+  width: 100%;
+}
+
+.git-lists {
+  flex: 1;
+  overflow: auto;
+  padding-bottom: 16px;
+}
+
+.git-section-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  margin: 0 6px;
+  padding: 0 6px 0 2px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-2);
+  cursor: default;
+}
+
+.git-section-title:hover {
+  background: var(--hover);
+}
+
+.git-section-name {
+  flex: 1;
+}
+
+.git-section-actions,
+.git-row-actions {
+  display: none;
+  gap: 1px;
+}
+
+.git-section-title:hover .git-section-actions,
+.git-row:hover .git-row-actions {
+  display: flex;
+}
+
+.git-section-actions .icon-button,
+.git-row-actions .icon-button {
+  width: 22px;
+  height: 22px;
+}
+
+.git-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--group-bg);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.git-row {
+  padding-left: 22px;
+}
+
+.git-row .result-dir {
+  flex: 1;
+}
+
+/* ---- Content ---- */
+
+.content {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.terminal-view,
+.editor-view,
+.diff-view {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* The same color as the top bar, so the two read as one surface. */
+.terminal-view {
+  padding: 8px 4px 4px 14px;
+  background: var(--chrome);
+}
+
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.xterm .xterm-viewport {
+  scrollbar-width: thin;
+}
+
+/* xterm paints this black; the terminal is transparent over .terminal-view. */
+.terminal-view .xterm .xterm-viewport {
+  background-color: transparent !important;
+}
+
+.term-find {
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 9px;
+  background: var(--bg-subtle);
+  box-shadow: var(--shadow-menu);
+}
+
+.term-find input {
+  width: 220px;
+  height: 26px;
+}
+
+.editor-host,
+.diff-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+.editor-host .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor-problem {
+  margin: auto;
+  font-size: 13px;
+  color: var(--fg-3);
+}
+
+.diff-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.diff-title {
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.diff-mode {
+  margin-left: 10px;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.diff-summary {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+
+.diff-host .cm-mergeView {
+  min-height: 100%;
+}
+
+/* ---- Welcome ---- */
+
+.welcome {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background-image: radial-gradient(var(--dots) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 420px;
+  padding: 28px 28px 20px;
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: var(--shadow-dialog);
+  text-align: center;
+  color: var(--fg-3);
+}
+
+.welcome-card h3 {
+  margin: 8px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+
+.welcome-card p {
+  margin: 0 0 8px;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-self: stretch;
+}
+
+.welcome-actions .button {
+  justify-content: flex-start;
+}
+
+.kbd {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.welcome-recent {
+  align-self: stretch;
+  margin-top: 14px;
+  text-align: left;
+}
+
+.recent-title {
+  padding: 4px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-3);
+}
+
+.recent-folder {
+  width: calc(100% - 12px);
+  height: 28px;
+  padding-left: 8px;
+  border: none;
+  background: none;
+}
+
+/* ---- Quick open ---- */
+
+.quick-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.quick {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  width: min(600px, calc(100vw - 40px));
+  transform: translateX(-50%);
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  box-shadow: var(--shadow-dialog);
+  backdrop-filter: blur(24px) saturate(1.6);
+}
+
+:root[data-theme="light"] .quick {
+  background: rgba(250, 250, 252, 0.92);
+}
+
+.quick input {
+  height: 36px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.quick-list {
+  max-height: 380px;
+  overflow: auto;
+}
+
+.quick-row {
+  height: 28px;
+  margin: 0;
+  padding-left: 8px;
+}
+
+.quick-row.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.quick-row.active .result-dir {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* ---- Buttons, menus and the title bar controls ---- */
+
+.button {
+  border-radius: 7px;
+}
+
+:root[data-theme="light"] .button {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.07);
+}
+
+:root[data-theme="light"] .button:hover:not(:disabled) {
+  background: #f7f7f9;
+}
+
+.button.primary,
+:root[data-theme="light"] .button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.button.primary:hover:not(:disabled),
+:root[data-theme="light"] .button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, #808080);
+  border-color: color-mix(in srgb, var(--accent) 88%, #808080);
+}
+
+.context-menu,
+.popover {
+  border-radius: 10px;
+  padding: 5px;
+  backdrop-filter: blur(24px) saturate(1.6);
+}
+
+:root[data-theme="light"] .context-menu,
+:root[data-theme="light"] .popover {
+  background: rgba(250, 250, 252, 0.88);
+}
+
+.context-menu .menu-item {
+  height: 26px;
+  border-radius: 5px;
+}
+
+.context-menu .menu-item:hover:not(:disabled),
+.context-menu .menu-item.open {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.context-menu .menu-item:hover:not(:disabled) .menu-icon,
+.context-menu .menu-item:hover:not(:disabled) .menu-shortcut,
+.context-menu .menu-item:hover:not(:disabled) .menu-detail,
+.context-menu .menu-item:hover:not(:disabled) .menu-check,
+.context-menu .menu-item:hover:not(:disabled) .menu-chevron,
+.context-menu .menu-item.open .menu-icon,
+.context-menu .menu-item.open .menu-detail,
+.context-menu .menu-item.open .menu-chevron {
+  color: inherit;
+}
+
+.menu-detail {
+  margin-left: 16px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.menu-chevron {
+  flex-shrink: 0;
+  margin-right: -2px;
+  color: var(--fg-3);
+}
+
+.menu-check {
+  flex-shrink: 0;
+  color: var(--fg-2);
+}
+
+.dialog {
+  border-radius: 12px;
+}
+
+/* ---- Theme menus and element picker ---- */
+
+.font-sample {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.theme-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 16px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 0.5px rgba(127, 127, 127, 0.5);
+}
+
+.theme-swatch i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+}
+
+.content:has(.pick-strip) .terminal-view {
+  bottom: 44px;
+}
+
+.pick-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-top: 1px solid var(--border);
+  background: var(--chrome);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pick-strip-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-3);
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.pick-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 260px;
+  height: 28px;
+  padding: 0 4px 0 4px;
+  border: none;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: var(--raised-shadow);
+  font-size: 12px;
+  color: var(--fg);
+  flex-shrink: 0;
+}
+
+.pick-chip img {
+  width: 34px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.pick-chip span:not(.pick-remove) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 2px;
+}
+
+.pick-remove {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+
+.pick-remove:hover {
+  background: var(--press);
+  color: var(--fg-strong);
+}
+
+.panel-open-folder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+
+.panel-open-folder p {
+  margin: 0;
+}
+
+
+/* Minimized: a narrow bar with small icons. Sizes animate between the two. */
+.app.compact {
+  --bar-w: 28px;
+}
+
+.activity-button,
+.activity-button svg,
+.activity-divider,
+.activity-badge {
+  transition-duration: 0.24s;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.activity-button {
+  transition-property: height, color;
+}
+
+.activity-button svg,
+.activity-divider {
+  transition-property: width, height;
+}
+
+.activity-badge {
+  transition-property: right, bottom, min-width, height, padding, border-radius, font-size, line-height;
+}
+
+.app.compact .activity-button {
+  height: 28px;
+}
+
+.app.compact .activity-toggle {
+  height: 26px;
+}
+
+.app.compact .activity-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app.compact .activity-divider {
+  width: 14px;
+}
+
+.app.compact .activity-badge {
+  right: 1px;
+  bottom: 1px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  border-radius: 6px;
+  font-size: 8px;
+  line-height: 12px;
+}
+
+/* ---- Meme button ---- */
+
+.meme-button {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: #000;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+
+.meme-button:hover {
+  transform: scale(1.08);
+}
+
+.meme-button:active {
+  transform: scale(0.95);
+}
+
+.content:has(.pick-strip) .meme-button {
+  bottom: 58px;
+}
+
+.meme-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  animation: menu-in 0.12s ease-out;
+}
+
+.meme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(720px, 80vw);
+  max-height: 88vh;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-subtle);
+  box-shadow: var(--shadow-menu);
+}
+
+.meme-head,
+.meme-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meme-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+
+.meme-body {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.meme-body img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 8px;
+}
+
+.meme-body img.loading {
+  display: none;
+}
+
+.meme-status {
+  padding: 100px 0;
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+
+.meme-source {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.meme-source:hover {
+  color: var(--fg);
+  text-decoration: underline;
+}
