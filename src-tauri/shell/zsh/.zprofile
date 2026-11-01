@@ -1,0 +1,5 @@
+if [[ -f "${LOOKOUT_USER_ZDOTDIR:-$HOME}/.zprofile" ]]; then
+  ZDOTDIR=${LOOKOUT_USER_ZDOTDIR:-$HOME}
+  . "$ZDOTDIR/.zprofile"
+  ZDOTDIR=$LOOKOUT_ZDOTDIR
+fi
