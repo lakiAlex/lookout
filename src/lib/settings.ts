@@ -7,8 +7,10 @@ export interface Settings {
   blinkMs: number;
   /** How fast held ⌫, Delete, ← and → repeat in the terminal; "system" uses the macOS setting. */
   keyRepeat: "system" | "fast" | "faster";
-  /** An id from FONTS. */
+  /** An id from FONTS, for the terminal and the editor. */
   font: string;
+  /** An id from UI_FONTS, for the rest of the app. */
+  uiFont: string;
   lineHeight: number;
   /** Option sends Meta (Esc + key) instead of typing characters like @ and €. */
   optionIsMeta: boolean;
@@ -17,6 +19,10 @@ export interface Settings {
   wordWrap: boolean;
   /** The element picker: its sidebar button and the ⌥⌘E shortcut. */
   picker: boolean;
+  /** macOS notifications while Lookout is in the background. */
+  banners: boolean;
+  /** "Last login: ..." at the top of new terminals, as in Terminal. */
+  lastLogin: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,12 +31,15 @@ export const DEFAULT_SETTINGS: Settings = {
   blinkMs: 600,
   keyRepeat: "fast",
   font: "sf-mono",
+  uiFont: "system",
   lineHeight: 1.2,
   optionIsMeta: false,
   copyOnSelect: false,
   scrollback: 10000,
   wordWrap: false,
   picker: true,
+  banners: true,
+  lastLogin: true,
 };
 
 const KEY = "lookout.settings";
@@ -51,9 +60,11 @@ export function saveSetting<K extends keyof Settings>(key: K, value: Settings[K]
   localStorage.setItem(KEY, JSON.stringify({ ...stored(), [key]: value }));
 }
 
-/** Monospace fonts. The first three come with macOS; the rest are listed when installed. */
+/** Monospace fonts. SF Mono, Menlo and Monaco come with macOS and Geist Mono
+ * ships with Lookout; the rest are listed when installed. */
 export const FONTS = [
   { id: "sf-mono", label: "SF Mono", family: null, css: 'ui-monospace, "SF Mono", Menlo, monospace' },
+  { id: "geist-mono", label: "Geist Mono", family: "Geist Mono Variable", css: '"Geist Mono Variable", Menlo, monospace' },
   { id: "menlo", label: "Menlo", family: "Menlo", css: "Menlo, monospace" },
   { id: "monaco", label: "Monaco", family: "Monaco", css: "Monaco, Menlo, monospace" },
   { id: "jetbrains-mono", label: "JetBrains Mono", family: "JetBrains Mono", css: '"JetBrains Mono", Menlo, monospace' },
@@ -62,10 +73,21 @@ export const FONTS = [
   { id: "source-code-pro", label: "Source Code Pro", family: "Source Code Pro", css: '"Source Code Pro", Menlo, monospace' },
   { id: "ibm-plex-mono", label: "IBM Plex Mono", family: "IBM Plex Mono", css: '"IBM Plex Mono", Menlo, monospace' },
   { id: "hack", label: "Hack", family: "Hack", css: "Hack, Menlo, monospace" },
-  { id: "geist-mono", label: "Geist Mono", family: "Geist Mono", css: '"Geist Mono", Menlo, monospace' },
 ];
 
-const BUILT_IN = new Set(["sf-mono", "menlo", "monaco"]);
+const BUILT_IN = new Set(["sf-mono", "geist-mono", "menlo", "monaco"]);
+
+/** Fonts for the app around the terminal and the editor: menus, panels, tabs.
+ * Geist ships with Lookout. Proportional fonts are not offered for the
+ * terminal, where every character needs the same width. */
+export const UI_FONTS = [
+  { id: "system", label: "SF Pro", css: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif' },
+  { id: "geist", label: "Geist", css: '"Geist Variable", -apple-system, BlinkMacSystemFont, sans-serif' },
+];
+
+export function uiFontCss(id: string): string {
+  return (UI_FONTS.find((f) => f.id === id) ?? UI_FONTS[0]).css;
+}
 
 /** True when text in `family` measures differently from the fallback fonts,
  * which means the font is installed. */

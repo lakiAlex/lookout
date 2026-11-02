@@ -22,10 +22,17 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 **Terminal**
 
 - Tabs with your login shell, started in the open folder. ⌘T opens a terminal, ⇧⌘T (or the Claude button in the tab bar) opens a terminal that runs `claude`.
+- New terminals start with "Last login: ..." as in Terminal, unless `~/.hushlogin` exists. Settings > Last login message turns it off.
 - Tab titles follow the running program, and tabs running Claude Code get the Claude icon.
 - GPU rendering, clickable links, find (⌘F) and clear (⌘K).
 - Keys set up for Claude Code: Shift+Return is a new line in the prompt, ⌘← and ⌘→ go to the start and end of the line, ⌘⌫ deletes the line, ⌥← and ⌥→ move by word, ⌥⌫ deletes a word.
-- For zsh, Lookout loads your own `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin` and then adds what is missing: a colored prompt with the folder and git branch when you use the macOS default prompt, command highlighting with zsh-syntax-highlighting when you do not load it yourself, and colored `ls` output. This only applies inside Lookout.
+- For zsh, Lookout loads your own `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin` and then adds what is missing: a colored prompt with the folder and git branch when you use the macOS default prompt, command highlighting with zsh-syntax-highlighting when you do not load it yourself, and colored `ls` output. It also marks where each command starts and ends, for notifications, and starts `claude` with two hooks that report when Claude is done (see Notifications). This only applies inside Lookout.
+
+**Windows**
+
+- ⌘N opens another window on the same folder. Each window has its own folder, tabs and panels, and closing a window ends its terminals.
+- Drag a tab along the tab bar to reorder it, or drag it down out of the bar and let go to open it in a window of its own. A terminal keeps running and keeps what is on screen, and a file keeps unsaved changes. The tab's menu has Move to New Window too.
+- ⇧⌘W closes the window.
 
 **Element picker**
 
@@ -33,6 +40,12 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 - Lookout reads the element through macOS Accessibility: the app and window, the page address and title in browsers, the element's role, name, value and text, its DOM id and classes in Chromium and Electron apps, its position, the elements around it, and a screenshot of it.
 - The report and screenshot are pasted into the Claude tab, followed by a space, so you can type your question right after. When no Claude tab is open, a new Claude session starts and gets the pick.
 - Recent picks stay as chips under the terminal. Click one to send it again.
+
+**Notifications**
+
+- The bell in the top bar lists notifications from all windows as cards: Claude finishing (with the start of its reply), Claude asking for permission or input, commands that ran for 10 seconds or more finishing or failing, and messages programs send with the OSC 9 and OSC 777 escape codes. Click a card to go to its tab.
+- When it comes from a tab you are not looking at, a card pops up under the bell for a few seconds. While another app is in front, Lookout posts a macOS notification instead. Settings > Mac notifications turns those off.
+- Claude Code reports through its Stop and Notification hooks. Lookout's zsh starts `claude` with `--settings` pointing at its own hooks file, so your `~/.claude` settings and hooks stay as they are. Notifications are kept until Lookout quits.
 
 **Files**
 
@@ -46,6 +59,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 
 **Source control**
 
+- The top bar shows the number of changed files and the lines added and removed since the last commit, new files included. A click opens Source Control.
 - Staged and unstaged changes, stage, unstage or discard one file or all, side-by-side diffs, commit with ⌘Return, push, pull, fetch, and switch or create branches.
 - Uses the `git` installed on the Mac, with your config and credentials.
 
@@ -57,7 +71,8 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 **Settings**
 
 - Light and dark mode in the top bar.
-- The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), font (SF Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, scrollback length, the element picker on or off, word wrap in the editor, and memes.
+- The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), code font for the terminal and the editor (SF Mono, Geist Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), interface font (SF Pro or Geist), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, the last login message, scrollback length, the element picker on or off, word wrap in the editor, Mac notifications, and memes. Geist and Geist Mono ship with Lookout.
+- Settings changed in one window apply to the other windows.
 - The sidebar minimizes to a narrow strip with small icons.
 - The dog button in the corner shows a random meme from Reddit through [meme-api.com](https://github.com/D3vd/Meme_Api), skipping posts marked NSFW. Settings > Memes turns it off.
 
@@ -67,7 +82,8 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 | --- | --- |
 | ⌥⌘E | Pick an element on screen (works in any app) |
 | ⌘T, ⇧⌘T | New terminal, new Claude session |
-| ⌘W | Close tab |
+| ⌘N | New window |
+| ⌘W, ⇧⌘W | Close tab, close window |
 | ⌘1 to ⌘9, ⇧⌘[ and ⇧⌘], ⌃Tab | Switch tabs |
 | ⌘O | Open folder |
 | ⌘P | Quick open a file |
@@ -116,8 +132,10 @@ cargo test
 | Path | Contents |
 | --- | --- |
 | `src-tauri/src/picker.rs` | The element picker: event tap, Accessibility lookups, highlight window, report and screenshot |
-| `src-tauri/src/pty.rs` | Shell sessions |
-| `src-tauri/src/shell.rs`, `src-tauri/shell/` | zsh startup files and zsh-syntax-highlighting |
+| `src-tauri/src/pty.rs` | Shell sessions, and moving them between windows |
+| `src-tauri/src/windows.rs` | Opening windows and which one is in front |
+| `src-tauri/src/notices.rs` | Notifications and Claude's last reply |
+| `src-tauri/src/shell.rs`, `src-tauri/shell/` | zsh startup files, zsh-syntax-highlighting and the Claude Code hooks |
 | `src-tauri/src/files.rs`, `search.rs`, `git.rs` | Files and the file watcher, search, git |
 | `src/App.tsx` | Layout, tabs, menus, settings, shortcuts |
 | `src/components/` | Terminal, editor, diff view, panels, menus, dialogs |
@@ -148,6 +166,7 @@ cargo test
 | [Icons - Maintained](https://github.com/yusifaliyevpro/vscode-icons) | File icons in the explorer and tabs | MIT |
 | [Hugeicons](https://hugeicons.com) | Icons | MIT |
 | [Lucide](https://lucide.dev) | The dog and the title bar glyph | ISC |
+| [Geist and Geist Mono](https://vercel.com/font) | Interface and code fonts | OFL-1.1 |
 | [iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes) | Terminal theme colors | MIT |
 | [tm-themes](https://github.com/shikijs/textmate-grammars-themes) | Editor theme colors | MIT |
 

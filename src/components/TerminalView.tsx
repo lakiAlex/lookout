@@ -2,6 +2,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
@@ -24,16 +25,49 @@ export interface TerminalHandle {
   clear: () => void;
   find: () => void;
   sessionId: () => string | null;
+  /** Hands the session to another window: holds its output and returns the
+   * screen and scrollback. Closing the tab afterwards leaves the shell running. */
+  moveOut: () => Promise<string>;
+  /** Takes the session back after a move failed. */
+  cancelMove: () => void;
 }
 
 export const terminals = new Map<string, TerminalHandle>();
 
+/** The JSON Claude Code passes to its Stop and Notification hooks. */
+export interface ClaudeHook {
+  hook_event_name: string;
+  transcript_path?: string;
+  cwd?: string;
+  message?: string;
+  notification_type?: string;
+  stop_hook_active?: boolean;
+}
+
+/** Something in the terminal worth a notification. */
+export type TerminalEvent =
+  | { type: "command"; line: string; exitCode: number; seconds: number }
+  | { type: "claude"; hook: ClaudeHook }
+  | { type: "message"; title: string; body: string };
+
+function decodeHook(base64: string): ClaudeHook | null {
+  try {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+}
 
 interface TerminalViewProps {
   tabId: string;
   cwd: string | null;
   /** A command typed into the shell once it starts, like "claude". */
   run: string | null;
+  /** A running session to attach to, for a tab moved from another window. */
+  sessionId: string | null;
+  /** That tab's screen, drawn before the session's output continues. */
+  snapshot?: string;
   active: boolean;
   theme: Theme;
   /** An id from TERMINAL_THEMES. */
@@ -41,6 +75,7 @@ interface TerminalViewProps {
   fontSize: number;
   settings: Settings;
   onSession: (sessionId: string) => void;
+  onEvent: (event: TerminalEvent) => void;
 }
 
 export function TerminalView(props: TerminalViewProps) {
@@ -74,9 +109,11 @@ export function TerminalView(props: TerminalViewProps) {
     const fit = new FitAddon();
     const search = new SearchAddon();
     const unicode = new Unicode11Addon();
+    const serialize = new SerializeAddon();
     term.loadAddon(fit);
     term.loadAddon(search);
     term.loadAddon(unicode);
+    term.loadAddon(serialize);
     term.unicode.activeVersion = "11";
     term.loadAddon(new WebLinksAddon((_event, uri) => void openUrl(uri)));
     term.open(containerRef.current!);
@@ -153,6 +190,38 @@ export function TerminalView(props: TerminalViewProps) {
       return true;
     });
 
+    // Lookout's marks, OSC 7701 (see shell/zsh/lookout.zsh): a command
+    // starting and ending, and the JSON of Claude Code's hooks.
+    let command: { line: string; at: number } | null = null;
+    term.parser.registerOscHandler(7701, (data) => {
+      const [kind, ...rest] = data.split(";");
+      const value = rest.join(";");
+      if (kind === "start") {
+        command = { line: value, at: Date.now() };
+      } else if (kind === "end" && command) {
+        latest.current.onEvent({ type: "command", line: command.line, exitCode: Number(value) || 0, seconds: (Date.now() - command.at) / 1000 });
+        command = null;
+      } else if (kind === "claude") {
+        const hook = decodeHook(value);
+        if (hook) latest.current.onEvent({ type: "claude", hook });
+      }
+      return true;
+    });
+    // Notifications programs send to the terminal: OSC 9 as in iTerm2, and
+    // OSC 777 "notify;title;body" as in rxvt and Ghostty.
+    term.parser.registerOscHandler(9, (data) => {
+      // Numbered OSC 9 commands, like ConEmu's progress, are not messages.
+      if (/^\d+;/.test(data)) return false;
+      latest.current.onEvent({ type: "message", title: "", body: data });
+      return true;
+    });
+    term.parser.registerOscHandler(777, (data) => {
+      const [kind, title = "", ...body] = data.split(";");
+      if (kind !== "notify") return false;
+      latest.current.onEvent({ type: "message", title, body: body.join(";") });
+      return true;
+    });
+
     const channel = new Channel<ArrayBuffer>();
     channel.onmessage = (data) => term.write(new Uint8Array(data));
     term.onData(send);
@@ -177,17 +246,34 @@ export function TerminalView(props: TerminalViewProps) {
     });
 
     let disposed = false;
-    void api.ptySpawn(props.cwd, term.cols, term.rows, props.run, channel).then(
-      (id) => {
-        if (disposed) {
-          void api.ptyKill(id);
-          return;
-        }
-        sessionRef.current = id;
-        props.onSession(id);
-      },
-      (e) => term.write(`\r\n\x1b[31mCould not start the shell: ${String(e?.message ?? e)}\x1b[0m\r\n`),
-    );
+    /** The session moved to another window and must keep running. */
+    let released = false;
+    if (props.sessionId) {
+      // A tab from another window: its screen, then the output held since it left.
+      const id = props.sessionId;
+      if (props.snapshot) term.write(props.snapshot);
+      sessionRef.current = id;
+      void api.ptyAttach(id, channel).then(
+        () => {
+          // The window may have another size; programs redraw for the new one.
+          void api.ptyResize(id, term.cols, term.rows);
+          props.onSession(id);
+        },
+        (e) => term.write(`\r\n\x1b[31mCould not move the terminal: ${String(e?.message ?? e)}\x1b[0m\r\n`),
+      );
+    } else {
+      void api.ptySpawn(props.cwd, term.cols, term.rows, props.run, props.settings.lastLogin, channel).then(
+        (id) => {
+          if (disposed) {
+            void api.ptyKill(id);
+            return;
+          }
+          sessionRef.current = id;
+          props.onSession(id);
+        },
+        (e) => term.write(`\r\n\x1b[31mCould not start the shell: ${String(e?.message ?? e)}\x1b[0m\r\n`),
+      );
+    }
 
     const handle: TerminalHandle = {
       paste: (text) => term.paste(text),
@@ -199,6 +285,19 @@ export function TerminalView(props: TerminalViewProps) {
         requestAnimationFrame(() => findInput.current?.select());
       },
       sessionId: () => sessionRef.current,
+      moveOut: async () => {
+        const id = sessionRef.current;
+        if (!id) throw new Error("The terminal is still starting");
+        await api.ptyDetach(id);
+        // Output already sent over the channel arrives before the screen is copied.
+        await new Promise((resolve) => setTimeout(resolve, 80));
+        released = true;
+        return serialize.serialize({ scrollback: latest.current.settings.scrollback });
+      },
+      cancelMove: () => {
+        released = false;
+        if (sessionRef.current) void api.ptyAttach(sessionRef.current, channel);
+      },
     };
     terminals.set(props.tabId, handle);
 
@@ -211,7 +310,9 @@ export function TerminalView(props: TerminalViewProps) {
       disposed = true;
       observer.disconnect();
       terminals.delete(props.tabId);
-      if (sessionRef.current) void api.ptyKill(sessionRef.current);
+      const id = sessionRef.current;
+      // React mounts twice in development; a tab that mounted again keeps its session.
+      if (id && !released) setTimeout(() => terminals.has(props.tabId) || void api.ptyKill(id), 0);
       term.dispose();
     };
   }, []);

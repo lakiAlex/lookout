@@ -61,6 +61,46 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   files: GitFile[];
+  /** Lines added and removed since the last commit, new files included. */
+  added: number;
+  removed: number;
+}
+
+/** A notification under the bell in the title bar. */
+export interface Notice {
+  id: number;
+  kind: NoticeKind;
+  title: string;
+  body: string;
+  tabId: string;
+  tabTitle: string;
+  /** Milliseconds since 1970. */
+  time: number;
+  read: boolean;
+}
+
+export type NoticeKind = "claude" | "claude-input" | "done" | "failed" | "message";
+
+export interface NewNotice {
+  kind: NoticeKind;
+  title: string;
+  body: string;
+  tabId: string;
+  tabTitle: string;
+  /** The tab is the one showing in its window. */
+  tabActive: boolean;
+  /** macOS notifications are on in Settings. */
+  banner: boolean;
+}
+
+/** Opens a window. `start` is handed to its page as it is. */
+export interface NewWindow {
+  start: unknown;
+  /** The terminal session of a tab moved to the window. */
+  session: string | null;
+  /** Where a dragged tab was dropped, in screen points. */
+  x: number | null;
+  y: number | null;
 }
 
 export interface Branches {
@@ -97,8 +137,10 @@ export const api = {
   pickerPermission: () => invoke<boolean>("picker_permission"),
   openAccessibilitySettings: () => invoke<void>("open_accessibility_settings"),
   copyText: (text: string) => invoke<void>("copy_text", { text }),
-  ptySpawn: (cwd: string | null, cols: number, rows: number, run: string | null, onData: Channel<ArrayBuffer>) =>
-    invoke<string>("pty_spawn", { cwd, cols, rows, run, onData }),
+  ptySpawn: (cwd: string | null, cols: number, rows: number, run: string | null, login: boolean, onData: Channel<ArrayBuffer>) =>
+    invoke<string>("pty_spawn", { cwd, cols, rows, run, login, onData }),
+  ptyDetach: (id: string) => invoke<void>("pty_detach", { id }),
+  ptyAttach: (id: string, onData: Channel<ArrayBuffer>) => invoke<void>("pty_attach", { id, onData }),
   ptyWrite: (id: string, data: string) => invoke<void>("pty_write", { id, data }),
   ptyResize: (id: string, cols: number, rows: number) => invoke<void>("pty_resize", { id, cols, rows }),
   ptyKill: (id: string) => invoke<void>("pty_kill", { id }),
@@ -129,6 +171,17 @@ export const api = {
   gitBranches: (root: string) => invoke<Branches>("git_branches", { root }),
   gitSwitch: (root: string, branch: string, create: boolean) => invoke<void>("git_switch", { root, branch, create }),
   gitShow: (root: string, rev: string, path: string) => invoke<string>("git_show", { root, rev, path }),
+
+  windowNew: (request: NewWindow) => invoke<string>("window_new", { request }),
+  windowStart: () => invoke<unknown>("window_start"),
+
+  noticePost: (notice: NewNotice) => invoke<void>("notice_post", { notice }),
+  notices: () => invoke<Notice[]>("notices_list"),
+  noticesRead: () => invoke<void>("notices_read"),
+  noticeRemove: (id: number) => invoke<void>("notice_remove", { id }),
+  noticesClear: () => invoke<void>("notices_clear"),
+  noticeOpen: (id: number) => invoke<void>("notice_open", { id }),
+  claudeReply: (transcript: string) => invoke<string | null>("claude_reply", { transcript }),
 };
 
 export function basename(path: string): string {

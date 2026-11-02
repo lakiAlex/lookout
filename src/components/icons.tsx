@@ -9,8 +9,12 @@ import {
   ArrowUp01Icon,
   ArrowUp02Icon,
   AtIcon,
+  BrowserIcon,
   Cancel01Icon,
+  CancelCircleIcon,
   CaseSensitiveIcon,
+  CheckmarkCircle02Icon,
+  CleanIcon,
   ClipboardIcon,
   ComputerTerminal01Icon,
   Copy01Icon,
@@ -24,9 +28,12 @@ import {
   GitCompareIcon,
   KeyboardIcon,
   Loading03Icon,
+  Login01Icon,
+  MessageNotification01Icon,
   MinusSignIcon,
   Moon02Icon,
   MoreHorizontalIcon,
+  NotificationSquareIcon,
   OptionIcon,
   ParagraphSpacingIcon,
   PencilEdit02Icon,
@@ -64,8 +71,15 @@ export const ALargeSmall = icon(TextFontIcon);
 export const ArrowDown = icon(ArrowDown02Icon);
 export const ArrowUp = icon(ArrowUp02Icon);
 export const AtSign = icon(AtIcon);
+export const AppWindow = icon(BrowserIcon);
+export const Bell = icon(NotificationSquareIcon);
+export const BrushCleaning = icon(CleanIcon);
 export const CaseSensitive = icon(CaseSensitiveIcon);
 export const Check = icon(Tick02Icon);
+export const CircleCheck = icon(CheckmarkCircle02Icon);
+export const CircleX = icon(CancelCircleIcon);
+export const LogIn = icon(Login01Icon);
+export const MessageBell = icon(MessageNotification01Icon);
 export const ChevronDown = icon(ArrowDown01Icon);
 export const ChevronRight = icon(ArrowRight01Icon);
 export const ChevronUp = icon(ArrowUp01Icon);

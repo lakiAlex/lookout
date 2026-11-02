@@ -1,7 +1,8 @@
 //! Startup files for zsh in Lookout's terminals: they load the user's own
-//! files and then add a colored prompt and command highlighting (see
-//! shell/zsh/lookout.zsh). They are written to the app data folder, since zsh
-//! needs them as files.
+//! files and then add a colored prompt, command highlighting and the marks
+//! for notifications (see shell/zsh/lookout.zsh). claude-settings.json holds
+//! the Claude Code hooks that report when Claude is done. They are written to
+//! the app data folder, since zsh and Claude Code need them as files.
 
 use std::path::{Path, PathBuf};
 
@@ -10,6 +11,7 @@ const FILES: &[(&str, &str)] = &[
     ("zsh/.zprofile", include_str!("../shell/zsh/.zprofile")),
     ("zsh/.zshrc", include_str!("../shell/zsh/.zshrc")),
     ("zsh/lookout.zsh", include_str!("../shell/zsh/lookout.zsh")),
+    ("claude-settings.json", include_str!("../shell/claude-settings.json")),
     ("zsh-syntax-highlighting/zsh-syntax-highlighting.zsh", include_str!("../shell/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh")),
     ("zsh-syntax-highlighting/.version", include_str!("../shell/zsh-syntax-highlighting/.version")),
     ("zsh-syntax-highlighting/.revision-hash", include_str!("../shell/zsh-syntax-highlighting/.revision-hash")),

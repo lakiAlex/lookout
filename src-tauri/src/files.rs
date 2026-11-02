@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, EventTarget};
 
 use crate::error::{AppError, AppResult};
 
@@ -165,8 +165,10 @@ pub fn move_to_trash(paths: &[String]) -> AppResult<()> {
 }
 
 /// Watches a folder and emits "fs-changed" with the folders whose contents
-/// changed, and "git-changed" when the repository state may have changed.
-pub fn watch(app: AppHandle, root: &str) -> AppResult<notify::RecommendedWatcher> {
+/// changed, and "git-changed" when the repository state may have changed, to
+/// the window with the label `window`.
+pub fn watch(app: AppHandle, window: &str, root: &str) -> AppResult<notify::RecommendedWatcher> {
+    let target = EventTarget::webview_window(window);
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher = notify::recommended_watcher(tx).map_err(|e| AppError::other(e.to_string()))?;
     watcher.watch(Path::new(root), RecursiveMode::Recursive).map_err(|e| AppError::other(e.to_string()))?;
@@ -199,10 +201,10 @@ pub fn watch(app: AppHandle, root: &str) -> AppResult<notify::RecommendedWatcher
                 }
             }
             if !dirs.is_empty() {
-                let _ = app.emit("fs-changed", dirs.into_iter().collect::<Vec<_>>());
+                let _ = app.emit_to(target.clone(), "fs-changed", dirs.into_iter().collect::<Vec<_>>());
             }
             if git {
-                let _ = app.emit("git-changed", ());
+                let _ = app.emit_to(target.clone(), "git-changed", ());
             }
         }
     });

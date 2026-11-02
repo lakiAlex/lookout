@@ -26,6 +26,8 @@ export interface EditorHandle {
   find: () => void;
   isDirty: () => boolean;
   focus: () => void;
+  /** The text in the editor, saved or not. */
+  text: () => string;
 }
 
 export const editors = new Map<string, EditorHandle>();
@@ -36,6 +38,8 @@ interface EditorViewProps {
   active: boolean;
   /** Line (from 1) and character range to select after loading. */
   reveal: { line: number; from?: number; to?: number } | null;
+  /** Unsaved text to show in place of the file's, for a tab moved from another window. */
+  text?: string;
   wordWrap: boolean;
   onDirty: (dirty: boolean) => void;
   onSaved: () => void;
@@ -164,8 +168,11 @@ export function EditorView(props: EditorViewProps) {
       find: () => openSearchPanel(v),
       isDirty: () => dirty.current,
       focus: () => v.focus(),
+      text: () => v.state.doc.toString(),
     });
     void load(false).then(() => {
+      const text = latest.current.text;
+      if (text !== undefined && text !== v.state.doc.toString()) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: text } });
       const r = latest.current.reveal;
       if (r) goTo(r.line, r.from, r.to);
     });

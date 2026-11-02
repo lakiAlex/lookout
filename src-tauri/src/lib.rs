@@ -1,22 +1,27 @@
 mod error;
 mod files;
 mod git;
+mod notices;
 mod picker;
 mod pty;
 mod search;
 mod shell;
+mod windows;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use tauri::ipc::{Channel, InvokeResponseBody};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State, Window, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
 use error::{AppError, AppResult};
 use files::{Entry, FileText};
+use notices::{NewNotice, Notice, Notices};
 use pty::{SessionInfo, Sessions};
 use search::{SearchOptions, SearchResult, SearchState};
+use windows::{NewWindow, Windows};
 
 struct AppState {
     sessions: Sessions,
@@ -24,7 +29,8 @@ struct AppState {
     /// Off in Settings: the ⌥⌘E shortcut does nothing.
     picker_enabled: std::sync::atomic::AtomicBool,
     search: SearchState,
-    watcher: Mutex<Option<notify::RecommendedWatcher>>,
+    /// The open folder's watcher, by window label.
+    watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
     recent_path: PathBuf,
 }
 
@@ -33,14 +39,26 @@ struct AppState {
 #[tauri::command]
 fn pty_spawn(
     app: AppHandle,
+    window: Window,
     state: State<AppState>,
     cwd: Option<String>,
     cols: u16,
     rows: u16,
     run: Option<String>,
+    login: bool,
     on_data: Channel<InvokeResponseBody>,
 ) -> AppResult<String> {
-    state.sessions.spawn(app, cwd, cols, rows, run, on_data)
+    state.sessions.spawn(app, window.label(), cwd, cols, rows, run, login, on_data)
+}
+
+#[tauri::command]
+fn pty_detach(state: State<AppState>, id: String) -> AppResult<()> {
+    state.sessions.detach(&id)
+}
+
+#[tauri::command]
+fn pty_attach(window: Window, state: State<AppState>, id: String, on_data: Channel<InvokeResponseBody>) -> AppResult<()> {
+    state.sessions.attach(&id, window.label(), on_data)
 }
 
 #[tauri::command]
@@ -76,7 +94,7 @@ fn toggle_picker(app: &AppHandle) {
         return;
     }
     if let Err(e) = state.picker.start(app.clone()) {
-        let _ = app.emit("picker-error", picker::PickerError { code: e.code, message: e.message });
+        windows::emit_front(app, "picker-error", picker::PickerError { code: e.code, message: e.message });
     }
 }
 
@@ -155,9 +173,9 @@ fn trash_paths(paths: Vec<String>) -> AppResult<()> {
 }
 
 #[tauri::command]
-fn watch_folder(app: AppHandle, state: State<AppState>, path: String) -> AppResult<()> {
-    let watcher = files::watch(app, &path)?;
-    *state.watcher.lock().unwrap() = Some(watcher);
+fn watch_folder(app: AppHandle, window: Window, state: State<AppState>, path: String) -> AppResult<()> {
+    let watcher = files::watch(app, window.label(), &path)?;
+    state.watchers.lock().unwrap().insert(window.label().to_string(), watcher);
     Ok(())
 }
 
@@ -259,12 +277,85 @@ async fn git_show(root: String, rev: String, path: String) -> AppResult<String> 
     git::show(&root, &rev, &path).await
 }
 
+// ---- Windows ----
+
+/// Async, so the window is built off the thread that runs commands.
+#[tauri::command]
+async fn window_new(app: AppHandle, window: Window, request: NewWindow) -> AppResult<String> {
+    let label = app.state::<Windows>().open(&app, &window, &request)?;
+    if let Some(session) = &request.session {
+        app.state::<AppState>().sessions.set_owner(session, &label);
+    }
+    Ok(label)
+}
+
+#[tauri::command]
+fn window_start(window: Window, windows: State<Windows>) -> Option<serde_json::Value> {
+    windows.take_start(window.label())
+}
+
+fn on_window_event(window: &Window, event: &WindowEvent) {
+    let label = window.label();
+    if !windows::is_app_window(label) {
+        return;
+    }
+    let app = window.app_handle();
+    match event {
+        WindowEvent::Focused(focused) => app.state::<Windows>().set_focus(label, *focused),
+        WindowEvent::Destroyed => {
+            let state = app.state::<AppState>();
+            state.sessions.kill_owned_by(label);
+            state.watchers.lock().unwrap().remove(label);
+            app.state::<Windows>().closed(label);
+        }
+        _ => {}
+    }
+}
+
+// ---- Notifications ----
+
+#[tauri::command]
+fn notice_post(app: AppHandle, window: Window, notices: State<Notices>, windows: State<Windows>, notice: NewNotice) {
+    notices.post(&app, window.label(), windows.focused(), notice);
+}
+
+#[tauri::command]
+fn notices_list(notices: State<Notices>) -> Vec<Notice> {
+    notices.list()
+}
+
+#[tauri::command]
+fn notices_read(app: AppHandle, notices: State<Notices>) {
+    notices.mark_read(&app);
+}
+
+#[tauri::command]
+fn notice_remove(app: AppHandle, notices: State<Notices>, id: u64) {
+    notices.remove(&app, id);
+}
+
+#[tauri::command]
+fn notices_clear(app: AppHandle, notices: State<Notices>) {
+    notices.clear(&app);
+}
+
+#[tauri::command]
+fn notice_open(app: AppHandle, notices: State<Notices>, id: u64) {
+    notices.open(&app, id);
+}
+
+#[tauri::command]
+async fn claude_reply(transcript: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || notices::claude_reply(&transcript)).await.ok().flatten()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             // Option+Command+E picks an element anywhere on screen.
             tauri_plugin_global_shortcut::Builder::new()
@@ -286,9 +377,11 @@ pub fn run() {
                 picker: picker::Picker::default(),
                 picker_enabled: std::sync::atomic::AtomicBool::new(true),
                 search: SearchState::default(),
-                watcher: Mutex::new(None),
+                watchers: Mutex::new(HashMap::new()),
                 recent_path: dir.join("recent-folders.json"),
             });
+            app.manage(Windows::default());
+            app.manage(Notices::default());
             picker::log(app.handle(), &format!("launch: accessibility trusted = {}", picker::has_permission()));
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -297,6 +390,7 @@ pub fn run() {
             });
             Ok(())
         })
+        .on_window_event(on_window_event)
         .invoke_handler(tauri::generate_handler![
             picker_start,
             picker_cancel,
@@ -305,6 +399,8 @@ pub fn run() {
             picker_set_enabled,
             copy_text,
             pty_spawn,
+            pty_detach,
+            pty_attach,
             pty_write,
             pty_resize,
             pty_kill,
@@ -332,6 +428,15 @@ pub fn run() {
             git_branches,
             git_switch,
             git_show,
+            window_new,
+            window_start,
+            notice_post,
+            notices_list,
+            notices_read,
+            notice_remove,
+            notices_clear,
+            notice_open,
+            claude_reply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

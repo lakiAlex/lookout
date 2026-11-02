@@ -24,7 +24,7 @@ use core_foundation::string::{CFString, CFStringRef};
 use core_foundation::url::CFURL;
 use core_graphics::event::{CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType, CallbackResult, EventField};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::{AppError, AppResult};
 
@@ -401,7 +401,7 @@ impl Picker {
             );
             let refused = |what: &str| {
                 log(&tap_app, &format!("event tap failed: {what}"));
-                let _ = tap_app.emit("picker-error", PickerError { code: "permission", message: PERMISSION_MESSAGE.into() });
+                crate::windows::emit_front(&tap_app, "picker-error", PickerError { code: "permission", message: PERMISSION_MESSAGE.into() });
                 let _ = fail_tx.send(Msg::Cancel);
             };
             let Ok(tap) = tap else {
@@ -416,7 +416,7 @@ impl Picker {
             current.add_source(&source, unsafe { kCFRunLoopCommonModes });
             tap.enable();
             log(&tap_app, "event tap running");
-            let _ = tap_app.emit("picker-started", ());
+            crate::windows::emit_front(&tap_app, "picker-started", ());
             *tap_loop.lock().unwrap() = Some(SendRunLoop(current));
             CFRunLoop::run_current();
         });
@@ -591,9 +591,9 @@ fn work(app: AppHandle, rx: Receiver<Msg>) {
                 std::thread::sleep(Duration::from_millis(80));
                 let pick = describe(&app, &element);
                 log(&app, &format!("picked: {} (image: {})\n{}", pick.label, pick.image.is_some(), pick.report));
-                let _ = app.emit("picked", pick);
-                if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.set_focus();
+                // The pick goes to the Lookout window used last.
+                if let Some(window) = crate::windows::emit_front(&app, "picked", pick).and_then(|label| app.get_webview_window(&label)) {
+                    let _ = window.set_focus();
                 }
                 return;
             }
@@ -751,7 +751,8 @@ fn screenshot(app: &AppHandle, id: &str, frame: Rect) -> Option<String> {
         log(app, "screenshot skipped: no Screen Recording access");
         // Adds Lookout to the Screen Recording list and shows the system prompt the first time.
         unsafe { CGRequestScreenCaptureAccess() };
-        let _ = app.emit(
+        crate::windows::emit_front(
+            app,
             "picker-error",
             PickerError {
                 code: "screen",

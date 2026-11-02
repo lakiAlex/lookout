@@ -37,6 +37,12 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.15
         version: 6.43.15
+      '@fontsource-variable/geist':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource-variable/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@hugeicons/core-free-icons':
         specifier: ^4.4.0
         version: 4.4.0
@@ -64,6 +70,9 @@ importers:
       '@xterm/addon-search':
         specifier: ^0.16.0
         version: 0.16.0
+      '@xterm/addon-serialize':
+        specifier: ^0.14.0
+        version: 0.14.0
       '@xterm/addon-unicode11':
         specifier: ^0.9.0
         version: 0.9.0
@@ -205,6 +214,12 @@ packages:
 
   '@codemirror/view@6.43.15':
     resolution: {integrity: sha512-HHsfpqFeHyXLs983pSRe38Xajs0vFWZQ2BuX0m7Ki8w3jZ5iD8cuR3lBz2/5/X53Dhf32SBHKh6rtSTB6tKeGw==}
+
+  '@fontsource-variable/geist-mono@5.3.0':
+    resolution: {integrity: sha512-vBbuwDEo9AkrqADMXOrlAR3DFcJi4/JxeuU43FoiQERnNwsfXNnvxvReZG02cQKmyk4DZkZdBZX3oTDvy2zBAw==}
+
+  '@fontsource-variable/geist@5.3.0':
+    resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
 
   '@hugeicons/core-free-icons@4.4.0':
     resolution: {integrity: sha512-7Mz8bmGoY6tZ6l3C2TXwNMLVSr0I8HPwjjFIERAuJFj3rWwLxdF2ZLkDqdrVuEE1dx5b/VXyIsP4WoSU6Q40KQ==}
@@ -476,6 +491,9 @@ packages:
 
   '@xterm/addon-search@0.16.0':
     resolution: {integrity: sha512-9OeuBFu0/uZJPu+9AHKY6g/w0Czyb/Ut0A5t79I4ULoU4IfU5BEpPFVGQxP4zTTMdfZEYkVIRYbHBX1xWwjeSA==}
+
+  '@xterm/addon-serialize@0.14.0':
+    resolution: {integrity: sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA==}
 
   '@xterm/addon-unicode11@0.9.0':
     resolution: {integrity: sha512-FxDnYcyuXhNl+XSqGZL/t0U9eiNb/q3EWT5rYkQT/zuig8Gz/VagnQANKHdDWFM2lTMk9ly0EFQxxxtZUoRetw==}
@@ -954,6 +972,10 @@ snapshots:
       style-mod: 4.1.4
       w3c-keyname: 2.2.8
 
+  '@fontsource-variable/geist-mono@5.3.0': {}
+
+  '@fontsource-variable/geist@5.3.0': {}
+
   '@hugeicons/core-free-icons@4.4.0': {}
 
   '@hugeicons/react@1.1.10(react@19.3.1)':
@@ -1181,6 +1203,8 @@ snapshots:
   '@xterm/addon-fit@0.11.0': {}
 
   '@xterm/addon-search@0.16.0': {}
+
+  '@xterm/addon-serialize@0.14.0': {}
 
   '@xterm/addon-unicode11@0.9.0': {}
 

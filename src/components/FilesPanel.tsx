@@ -1,4 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ChevronRight, FilePlus2, FolderPlus, ListCollapse, RefreshCw } from "./icons";
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { api, basename, dirname, relative, toAppError, type Entry } from "../api";
@@ -69,7 +69,8 @@ export function FilesPanel(props: FilesPanelProps) {
 
   // Folders whose contents changed on disk are listed again if they are open.
   useEffect(() => {
-    const un = listen<string[]>("fs-changed", (event) => {
+    // This window's folder only; other windows watch their own.
+    const un = getCurrentWebviewWindow().listen<string[]>("fs-changed", (event) => {
       for (const dir of event.payload) if (expandedRef.current.has(dir)) void load(dir);
     });
     return () => void un.then((f) => f());

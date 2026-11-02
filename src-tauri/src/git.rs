@@ -54,6 +54,10 @@ pub struct Status {
     pub ahead: i64,
     pub behind: i64,
     pub files: Vec<FileStatus>,
+    /// Lines added and removed since the last commit, staged or not, with
+    /// the lines of new files counted as added. Shown in the title bar.
+    pub added: i64,
+    pub removed: i64,
 }
 
 /// The repository containing `path`, or None outside a repository.
@@ -97,8 +101,63 @@ pub fn parse_status(root: &str, text: &str) -> Status {
 
 pub async fn status(path: &str) -> AppResult<Option<Status>> {
     let Some(root) = root_of(path).await else { return Ok(None) };
-    let out = run(&root, &["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"]).await?;
-    Ok(Some(parse_status(&root, &out.stdout)))
+    let (out, numstat) = tokio::join!(
+        run(&root, &["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"]),
+        line_changes(&root),
+    );
+    let mut status = parse_status(&root, &out?.stdout);
+    (status.added, status.removed) = numstat;
+    let new: Vec<String> = status.files.iter().filter(|f| f.work == '?').map(|f| f.path.clone()).collect();
+    let base = root.clone();
+    status.added += tokio::task::spawn_blocking(move || count_lines(&base, &new)).await.unwrap_or(0);
+    Ok(Some(status))
+}
+
+/// The tree of a repository with no files, to compare against before the first commit.
+const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+async fn line_changes(root: &str) -> (i64, i64) {
+    let out = match run(root, &["diff", "HEAD", "--numstat"]).await {
+        Ok(out) => out,
+        Err(_) => match run(root, &["diff", EMPTY_TREE, "--numstat"]).await {
+            Ok(out) => out,
+            Err(_) => return (0, 0),
+        },
+    };
+    parse_numstat(&out.stdout)
+}
+
+/// Sums `git diff --numstat` lines: "added<TAB>removed<TAB>path", with "-"
+/// for both counts of a binary file.
+pub fn parse_numstat(text: &str) -> (i64, i64) {
+    text.lines().fold((0, 0), |(added, removed), line| {
+        let mut parts = line.split('\t');
+        let a = parts.next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
+        let r = parts.next().and_then(|n| n.parse::<i64>().ok()).unwrap_or(0);
+        (added + a, removed + r)
+    })
+}
+
+/// Lines in new files, which git diff leaves out. Binary files, files over
+/// 1 MB and files past the first 500 are skipped, so a folder of generated
+/// files cannot slow down every refresh.
+fn count_lines(root: &str, paths: &[String]) -> i64 {
+    paths
+        .iter()
+        .take(500)
+        .filter_map(|p| {
+            let path = Path::new(root).join(p);
+            if std::fs::metadata(&path).ok()?.len() > 1024 * 1024 {
+                return None;
+            }
+            let bytes = std::fs::read(&path).ok()?;
+            if bytes.iter().take(8000).any(|&b| b == 0) {
+                return None;
+            }
+            let lines = bytes.iter().filter(|&&b| b == b'\n').count() as i64;
+            Some(if bytes.last().is_some_and(|&b| b != b'\n') { lines + 1 } else { lines })
+        })
+        .sum()
 }
 
 pub async fn stage(root: &str, paths: &[String]) -> AppResult<()> {
@@ -208,5 +267,23 @@ u UU N... 100644 100644 100644 100644 aaa bbb ccc conflict.ts\0\
         let paths: Vec<(&str, char, char)> = s.files.iter().map(|f| (f.path.as_str(), f.index, f.work)).collect();
         assert_eq!(paths, [("src/a b.ts", '.', 'M'), ("new.ts", 'R', '.'), ("conflict.ts", 'U', 'U'), ("notes.md", '?', '?')]);
         assert_eq!(s.files[1].from.as_deref(), Some("old.ts"));
+    }
+
+    #[test]
+    fn sums_numstat() {
+        assert_eq!(parse_numstat("12\t3\tsrc/a.ts\n-\t-\timage.png\n0\t7\told.md\n"), (12, 10));
+        assert_eq!(parse_numstat(""), (0, 0));
+    }
+
+    #[test]
+    fn counts_lines_of_new_files() {
+        let dir = std::env::temp_dir().join(format!("lookout-lines-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), "one\ntwo\n").unwrap();
+        std::fs::write(dir.join("b.txt"), "no newline at the end").unwrap();
+        std::fs::write(dir.join("c.bin"), [0u8, 1, 2, b'\n']).unwrap();
+        let paths: Vec<String> = ["a.txt", "b.txt", "c.bin", "missing.txt"].map(String::from).to_vec();
+        assert_eq!(count_lines(dir.to_str().unwrap(), &paths), 3);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

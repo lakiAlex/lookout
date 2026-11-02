@@ -1,12 +1,14 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   ALargeSmall,
+  AppWindow,
   AtSign,
+  Bell,
   ClipboardCopy,
   Code,
   Copy,
@@ -17,6 +19,7 @@ import {
   GitBranch,
   GitCompare,
   Keyboard,
+  LogIn,
   Moon,
   Option,
   Pencil,
@@ -34,7 +37,7 @@ import {
   X,
 } from "./components/icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
-import { api, basename, dirname, relative, tildify, toAppError, type AppError, type Entry, type GitFile, type GitStatus, type Pick } from "./api";
+import { api, basename, dirname, relative, tildify, toAppError, type AppError, type Entry, type GitFile, type GitStatus, type Notice, type Pick } from "./api";
 import { SidebarIcon, type SidebarIconName } from "./components/SidebarIcon";
 import { MemeButton } from "./components/Meme";
 import { ContextMenu, type MenuEntry, type MenuState } from "./components/ContextMenu";
@@ -42,12 +45,28 @@ import { ChoiceDialog, InputDialog } from "./components/Dialogs";
 import { DiffView } from "./components/DiffView";
 import { editors, EditorView } from "./components/EditorView";
 import { FilesPanel, type GitMark } from "./components/FilesPanel";
+import { GitChip } from "./components/GitChip";
 import { GitPanel } from "./components/GitPanel";
+import { noticeFor, NoticePeeks, NotificationBell } from "./components/Notifications";
 import { QuickOpen } from "./components/QuickOpen";
 import { SearchPanel } from "./components/SearchPanel";
-import { terminals, TerminalView } from "./components/TerminalView";
+import { TabBar } from "./components/TabBar";
+import { terminals, TerminalView, type TerminalEvent } from "./components/TerminalView";
 import { EDITOR_THEME_KEY, EDITOR_THEMES, editorColors, savedEditorTheme } from "./lib/editorThemes";
-import { availableFonts, BLINK_SPEEDS, fontCss, KEY_REPEAT, LINE_HEIGHTS, loadSettings, saveSetting, SCROLLBACK, type Settings } from "./lib/settings";
+import {
+  availableFonts,
+  BLINK_SPEEDS,
+  fontCss,
+  KEY_REPEAT,
+  LINE_HEIGHTS,
+  loadSettings,
+  saveSetting,
+  SCROLLBACK,
+  UI_FONTS,
+  uiFontCss,
+  type Settings,
+} from "./lib/settings";
+import { newTabId, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
 import { savedTerminalTheme, TERMINAL_THEME_KEY, TERMINAL_THEMES, terminalColors } from "./lib/terminalThemes";
 import { iconUrl } from "./icons";
 
@@ -56,16 +75,14 @@ const SIDE_KEY = "lookout.sideWidth";
 const FONT_KEY = "lookout.fontSize";
 const COMPACT_KEY = "lookout.compactBar";
 const MEMES_KEY = "lookout.memes";
+const SETTINGS_KEY = "lookout.settings";
 const CURSOR_LABELS = { underline: "Underline", bar: "Bar", block: "Block" } as const;
+
+/** This window. Events are listened to here, so one window does not get another's. */
+const appWindow = getCurrentWebviewWindow();
 
 type Theme = "dark" | "light";
 type Panel = "files" | "search" | "git";
-type Reveal = { line: number; from?: number; to?: number };
-
-type Tab =
-  | { kind: "terminal"; id: string; cwd: string | null; run: string | null; sessionId: string | null; title: string; claude: boolean }
-  | { kind: "file"; id: string; path: string; dirty: boolean; preview: boolean; reveal: Reveal | null }
-  | { kind: "diff"; id: string; root: string; path: string; staged: boolean };
 
 type DialogState =
   | { type: "choice"; title: string; message: ReactNode; actions: { label: string; kind?: "primary" | "danger-ghost"; onClick: () => void }[] }
@@ -77,8 +94,7 @@ interface Toast {
   message: string;
 }
 
-let nextId = 1;
-const newId = () => `tab${nextId++}`;
+const newId = newTabId;
 
 function markFor(file: GitFile): GitMark {
   if (file.index === "U") return { letter: "!", kind: "conflict" };
@@ -127,9 +143,13 @@ export default function App() {
   const [picks, setPicks] = useState<Pick[]>([]);
   /** Picks waiting for a Claude session that is still starting, by tab. */
   const waiting = useRef(new Map<string, Pick[]>());
+  /** All windows' notifications, newest first. */
+  const [notices, setNotices] = useState<Notice[]>([]);
+  /** Notifications popping up under the bell in this window. */
+  const [peeks, setPeeks] = useState<Notice[]>([]);
 
-  const latest = useRef({ tabs, activeId, folder, git, panel });
-  latest.current = { tabs, activeId, folder, git, panel };
+  const latest = useRef({ tabs, activeId, folder, git, panel, settings });
+  latest.current = { tabs, activeId, folder, git, panel, settings };
   const active = tabs.find((t) => t.id === activeId) ?? null;
 
   const toast = useCallback((kind: Toast["kind"], message: string) => {
@@ -147,6 +167,22 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => document.documentElement.style.setProperty("--code-font", fontCss(settings.font)), [settings.font]);
+
+  useEffect(() => document.documentElement.style.setProperty("--font", uiFontCss(settings.uiFont)), [settings.uiFont]);
+
+  // Settings changed in another window apply here too.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === SETTINGS_KEY) setSettings(loadSettings());
+      else if (e.key === THEME_KEY && (e.newValue === "dark" || e.newValue === "light")) setTheme(e.newValue);
+      else if (e.key === EDITOR_THEME_KEY && e.newValue) setEditorTheme(e.newValue);
+      else if (e.key === TERMINAL_THEME_KEY && e.newValue) setTerminalTheme(e.newValue);
+      else if (e.key === FONT_KEY && Number(e.newValue)) setFontSize(Number(e.newValue));
+      else if (e.key === MEMES_KEY) setMemes(e.newValue !== "0");
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => void api.pickerSetEnabled(settings.picker).catch(() => undefined), [settings.picker]);
 
@@ -257,11 +293,11 @@ export default function App() {
   );
 
   useEffect(() => {
-    const unPick = listen<Pick>("picked", (event) => {
+    const unPick = appWindow.listen<Pick>("picked", (event) => {
       setPicks((list) => [...list.slice(-7), event.payload]);
       sendPickRef.current(event.payload);
     });
-    const unErr = listen<AppError>("picker-error", (event) => {
+    const unErr = appWindow.listen<AppError>("picker-error", (event) => {
       if (event.payload.code !== "permission") return toast("error", event.payload.message);
       setDialog({
         type: "choice",
@@ -279,7 +315,7 @@ export default function App() {
         ],
       });
     });
-    const unStart = listen("picker-started", () => toast("info", "Point at anything and click to pick it. Esc cancels."));
+    const unStart = appWindow.listen("picker-started", () => toast("info", "Point at anything and click to pick it. Esc cancels."));
     return () => {
       void unPick.then((f) => f());
       void unErr.then((f) => f());
@@ -289,12 +325,42 @@ export default function App() {
 
   // A terminal's shell exiting closes its tab.
   useEffect(() => {
-    const un = listen<string>("pty-exit", (event) => {
+    const un = appWindow.listen<string>("pty-exit", (event) => {
       const tab = latest.current.tabs.find((t) => t.kind === "terminal" && t.sessionId === event.payload);
       if (tab) closeTab(tab.id, true);
     });
     return () => void un.then((f) => f());
   }, [closeTab]);
+
+  // ---- Notifications ----
+
+  useEffect(() => {
+    void api.notices().then(setNotices);
+    const unList = appWindow.listen<Notice[]>("notices", (event) => setNotices(event.payload));
+    const unPeek = appWindow.listen<Notice>("notice-peek", (event) => setPeeks((list) => [...list.slice(-2), event.payload]));
+    // A notification was clicked in some window; the window with the tab shows it.
+    const unOpen = appWindow.listen<string>("activate-tab", (event) => {
+      if (!latest.current.tabs.some((t) => t.id === event.payload)) return;
+      setActiveId(event.payload);
+      void appWindow.unminimize().then(() => appWindow.setFocus());
+    });
+    return () => {
+      void unList.then((f) => f());
+      void unPeek.then((f) => f());
+      void unOpen.then((f) => f());
+    };
+  }, []);
+
+  const terminalEvent = async (tabId: string, event: TerminalEvent) => {
+    const tab = latest.current.tabs.find((t) => t.id === tabId);
+    if (tab?.kind !== "terminal") return;
+    // Claude's own messages repeat what its hooks report.
+    if (event.type === "message" && tab.claude) return;
+    const tabTitle = event.type === "claude" && event.hook.cwd ? basename(event.hook.cwd) : tab.title;
+    const notice = await noticeFor(event, tabTitle);
+    if (!notice) return;
+    void api.noticePost({ ...notice, tabId, tabTitle, tabActive: latest.current.activeId === tabId, banner: latest.current.settings.banners });
+  };
 
   // Terminal tab titles follow the program in front (zsh, claude, npm) and the folder.
   useEffect(() => {
@@ -324,14 +390,14 @@ export default function App() {
   // ---- Folder ----
 
   const openFolder = useCallback(
-    async (path: string) => {
+    async (path: string, terminal = true) => {
       setFolder(path);
       setGit(undefined);
       setQuickFiles(null);
       setRecent(await api.addRecentFolder(path));
       void api.watchFolder(path).catch((e) => toast("error", toAppError(e).message));
       void getCurrentWindow().setTitle(`Lookout - ${basename(path)}`);
-      if (!latest.current.tabs.some((t) => t.kind === "terminal")) newTerminal(false, path);
+      if (terminal && !latest.current.tabs.some((t) => t.kind === "terminal")) newTerminal(false, path);
     },
     [newTerminal, toast],
   );
@@ -350,9 +416,18 @@ export default function App() {
       setHome(await api.homeDir());
       const list = await api.recentFolders();
       setRecent(list);
-      // Start with a terminal: in the last project, or in the home folder.
-      if (list[0]) await openFolder(list[0]);
-      else newTerminal(false);
+      const start = (await api.windowStart().catch(() => null)) as WindowStart | null;
+      if (start) {
+        // A window opened with ⌘N or by dragging a tab out: the other window's folder, and the tab.
+        if (start.folder) await openFolder(start.folder, !start.tab);
+        else if (!start.tab) newTerminal(false);
+        if (start.tab) addTab(start.tab);
+      } else if (list[0]) {
+        // Start with a terminal: in the last project, or in the home folder.
+        await openFolder(list[0]);
+      } else {
+        newTerminal(false);
+      }
       setStarted(true);
     })();
   }, []);
@@ -375,14 +450,14 @@ export default function App() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const un = listen("git-changed", () => {
+    const un = appWindow.listen("git-changed", () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         void refreshGit();
         setDataVersion((v) => v + 1);
       }, 300);
     });
-    const unFs = listen<string[]>("fs-changed", (event) => {
+    const unFs = appWindow.listen<string[]>("fs-changed", (event) => {
       setQuickFiles(null);
       // Open files that changed on disk and have no unsaved edits are read again.
       for (const tab of latest.current.tabs) {
@@ -588,6 +663,57 @@ export default function App() {
   const pasteSequenceRef = useRef(pasteSequence);
   pasteSequenceRef.current = pasteSequence;
 
+  // ---- Windows ----
+
+  /** A new window on the same folder, with a fresh terminal. */
+  const newWindow = useCallback(() => {
+    const start: WindowStart = { folder: latest.current.folder, tab: null };
+    void api.windowNew({ start, session: null, x: null, y: null }).catch((e) => toast("error", toAppError(e).message));
+  }, [toast]);
+
+  /** Moves a tab to its own window, at the drop point when dragged there. A
+   * terminal keeps its shell and what is on screen. */
+  const moveToNewWindow = async (id: string, at?: { x: number; y: number }) => {
+    const { tabs: list, folder: current } = latest.current;
+    const tab = list.find((t) => t.id === id);
+    if (!tab || list.length < 2) return;
+    let moving: Tab = tab;
+    let session: string | null = null;
+    const terminal = tab.kind === "terminal" ? terminals.get(tab.id) : undefined;
+    try {
+      if (tab.kind === "terminal") {
+        if (!terminal || !tab.sessionId) return;
+        session = tab.sessionId;
+        moving = { ...tab, snapshot: await terminal.moveOut() };
+      } else if (tab.kind === "file") {
+        const editor = editors.get(tab.id);
+        moving = { ...tab, preview: false, text: tab.dirty ? editor?.text() : undefined };
+      }
+      const start: WindowStart = { folder: current, tab: moving };
+      await api.windowNew({ start, session, x: at?.x ?? null, y: at?.y ?? null });
+    } catch (e) {
+      terminal?.cancelMove();
+      toast("error", toAppError(e).message);
+      return;
+    }
+    // The tab lives on in the new window: no save prompt, and the terminal's shell keeps running.
+    setTabs((l) => {
+      const index = l.findIndex((t) => t.id === id);
+      const next = l.filter((t) => t.id !== id);
+      if (latest.current.activeId === id) setActiveId(next[Math.min(index, next.length - 1)]?.id ?? null);
+      return next;
+    });
+  };
+
+  const moveTab = (id: string, index: number) =>
+    setTabs((l) => {
+      const tab = l.find((t) => t.id === id);
+      if (!tab) return l;
+      const rest = l.filter((t) => t.id !== id);
+      rest.splice(index, 0, tab);
+      return rest;
+    });
+
   // ---- Menus ----
 
   const fileMenu = (e: ReactMouseEvent, entry: Entry | null, actions: { newFile: () => void; newFolder: () => void; rename: () => void }) => {
@@ -654,6 +780,9 @@ export default function App() {
         },
       },
     ];
+    if (latest.current.tabs.length > 1) {
+      items.push("separator", { label: "Move to New Window", icon: <AppWindow size={14} />, onSelect: () => void moveToNewWindow(tab.id) });
+    }
     if (tab.kind === "file") {
       items.push(
         "separator",
@@ -690,6 +819,8 @@ export default function App() {
         f();
       };
       if (key === "t") return run(() => newTerminal(e.shiftKey));
+      if (key === "n" && !e.shiftKey) return run(newWindow);
+      if (key === "w" && e.shiftKey) return run(() => void getCurrentWindow().close());
       if (key === "w") return run(() => current && closeTab(current));
       if (key === "o") return run(() => void chooseFolder());
       if (key === "b") return run(() => setPanel((p) => (p ? null : "files")));
@@ -711,7 +842,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newTerminal, closeTab, chooseFolder]);
+  }, [newTerminal, closeTab, chooseFolder, newWindow]);
 
   // Unsaved files are offered for saving before the window closes.
   useEffect(() => {
@@ -842,11 +973,11 @@ export default function App() {
         },
         "separator",
         {
-          label: "Font",
+          label: "Code font",
           icon: <Type size={14} />,
           detail: availableFonts().find((f) => f.id === settings.font)?.label ?? "SF Mono",
           submenu: {
-            title: "Font",
+            title: "Code font",
             note: "Used in the terminal and the editor. Other coding fonts show up here once installed.",
             items: availableFonts().map((f) => ({
               label: f.label,
@@ -857,6 +988,25 @@ export default function App() {
               ),
               checked: f.id === settings.font,
               onSelect: () => changeSetting("font", f.id),
+            })),
+          },
+        },
+        {
+          label: "Interface font",
+          icon: <Type size={14} />,
+          detail: UI_FONTS.find((f) => f.id === settings.uiFont)?.label,
+          submenu: {
+            title: "Interface font",
+            note: "Used in tabs, panels and menus.",
+            items: UI_FONTS.map((f) => ({
+              label: f.label,
+              icon: (
+                <span className="font-sample" style={{ fontFamily: f.css }}>
+                  Aa
+                </span>
+              ),
+              checked: f.id === settings.uiFont,
+              onSelect: () => changeSetting("uiFont", f.id),
             })),
           },
         },
@@ -939,6 +1089,12 @@ export default function App() {
           onSelect: () => changeSetting("copyOnSelect", !settings.copyOnSelect),
         },
         {
+          label: "Last login message",
+          icon: <LogIn size={14} />,
+          checked: settings.lastLogin,
+          onSelect: () => changeSetting("lastLogin", !settings.lastLogin),
+        },
+        {
           label: "Scrollback",
           icon: <ScrollText size={14} />,
           detail: `${settings.scrollback.toLocaleString("en-US")} lines`,
@@ -966,6 +1122,12 @@ export default function App() {
           checked: settings.wordWrap,
           onSelect: () => changeSetting("wordWrap", !settings.wordWrap),
         },
+        {
+          label: "Mac notifications",
+          icon: <Bell size={14} />,
+          checked: settings.banners,
+          onSelect: () => changeSetting("banners", !settings.banners),
+        },
         "separator",
         {
           label: "Memes",
@@ -990,6 +1152,7 @@ export default function App() {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const items: MenuEntry[] = [
       { label: "Open Folder…", icon: <FolderOpen size={14} />, shortcut: "⌘O", onSelect: () => void chooseFolder() },
+      { label: "New Window", icon: <AppWindow size={14} />, shortcut: "⌘N", onSelect: newWindow },
     ];
     if (recent.length) {
       items.push(
@@ -1026,50 +1189,28 @@ export default function App() {
             </span>
           )}
         </div>
-        <div className="tabs" data-tauri-drag-region>
-          {tabs.map((tab) => {
-            const { icon, text } = tabLabel(tab);
-            const dirty = tab.kind === "file" && tab.dirty;
-            return (
-              <div
-                key={tab.id}
-                className={`tab${tab.id === activeId ? " active" : ""}${tab.kind === "file" && tab.preview ? " preview" : ""}`}
-                title={tab.kind === "file" ? tab.path : tab.kind === "diff" ? tab.path : undefined}
-                onMouseDown={(e) => {
-                  if (e.button === 1) {
-                    e.preventDefault();
-                    closeTab(tab.id);
-                  } else if (e.button === 0) setActiveId(tab.id);
-                }}
-                onDoubleClick={() => tab.kind === "file" && setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "file" ? { ...t, preview: false } : t)))}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  tabMenu(e, tab);
-                }}
-              >
-                <span className="tab-icon">{icon}</span>
-                <span className="tab-text">{text}</span>
-                <button
-                  type="button"
-                  className={`tab-close${dirty ? " dirty" : ""}`}
-                  title="Close (⌘W)"
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => closeTab(tab.id)}
-                >
-                  <span className="tab-dot" />
-                  <X size={12} />
-                </button>
-              </div>
-            );
-          })}
+        <TabBar
+          tabs={tabs}
+          activeId={activeId}
+          label={tabLabel}
+          canTearOff={tabs.length > 1}
+          onActivate={setActiveId}
+          onClose={(id) => closeTab(id)}
+          onPin={(id) => setTabs((l) => l.map((t) => (t.id === id && t.kind === "file" ? { ...t, preview: false } : t)))}
+          onMenu={tabMenu}
+          onMove={moveTab}
+          onTearOff={(id, x, y) => void moveToNewWindow(id, { x, y })}
+        >
           <button type="button" className="tab-new" title="New Terminal (⌘T)" onClick={() => newTerminal(false)}>
             <Plus size={15} />
           </button>
           <button type="button" className="tab-new claude" title="New Claude Session (⇧⌘T)" onClick={() => newTerminal(true)}>
             <Sparkle size={14} />
           </button>
-        </div>
+        </TabBar>
         <div className="titlebar-actions">
+          {git && <GitChip status={git} open={panel === "git"} onClick={() => setPanel((p) => (p === "git" ? null : "git"))} />}
+          <NotificationBell notices={notices} onOpen={(n) => void api.noticeOpen(n.id)} />
           <button
             type="button"
             role="switch"
@@ -1184,12 +1325,16 @@ export default function App() {
                 tabId={tab.id}
                 cwd={tab.cwd}
                 run={tab.run}
+                sessionId={tab.snapshot !== undefined ? tab.sessionId : null}
+                snapshot={tab.snapshot}
                 active={tab.id === activeId}
                 theme={theme}
                 terminalTheme={terminalTheme}
                 fontSize={fontSize}
                 settings={settings}
-                onSession={(sessionId) => setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, sessionId } : t)))}
+                // The screen copy of a moved tab is not needed once its session is attached.
+                onSession={(sessionId) => setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, sessionId, snapshot: undefined } : t)))}
+                onEvent={(event) => void terminalEvent(tab.id, event)}
               />
             );
           }
@@ -1201,6 +1346,7 @@ export default function App() {
                 path={tab.path}
                 active={tab.id === activeId}
                 reveal={tab.reveal}
+                text={tab.text}
                 wordWrap={settings.wordWrap}
                 onDirty={(dirty) =>
                   setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "file" ? { ...t, dirty, preview: dirty ? false : t.preview } : t)))
@@ -1301,6 +1447,11 @@ export default function App() {
           onConfirm={dialog.onConfirm}
         />
       )}
+      <NoticePeeks
+        peeks={peeks}
+        onOpen={(n) => void api.noticeOpen(n.id)}
+        onDone={(id) => setPeeks((list) => list.filter((n) => n.id !== id))}
+      />
       <div className="toasts">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
