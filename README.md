@@ -12,7 +12,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 ## Why Lookout
 
 - **Built for Claude Code.** Open a Claude session in a tab with keys already set up for its prompt, and see at a glance which tabs are running Claude.
-- **A picker for the whole screen.** Click any element in any app and send it to Claude with a screenshot and details, like Cursor's picker but across your whole Mac.
+- **A picker for the whole screen.** Click any element in any app, a button in a browser, a row in another program, anything on screen, and send it to Claude with a screenshot and the details, so you never have to describe what you mean.
 - **A full workspace.** A VS Code-style file explorer, project search, git with diffs, and a code editor, all in one window.
 - **Fast and native.** A real macOS app built in Rust, about 18 MB, that opens instantly. No Electron and no bundled browser.
 - **Free and open source.** MIT licensed, with no account, subscription or telemetry.
