@@ -3,11 +3,19 @@
   <img src="docs/title-light.png" width="174" height="44" alt="Lookout">
 </picture>
 
-Lookout is a terminal for macOS for working with Claude Code. It has a file explorer, search, source control and an editor in a sidebar like VS Code, and a picker that sends any element on screen, in any app, to Claude.
+Lookout is an extremely snappy, lightweight, open-source terminal for macOS built for Claude Code. Use Claude in the terminal with a VS Code-style file explorer, search, git and editor, and pick any element on your screen, in any app, to send straight to Claude.
 
 ![Lookout in use: an element picked in Chrome is pasted into Claude Code, Claude answers and edits the code, then the Files and Source Control panels, light mode and the settings menu](docs/demo.gif)
 
 It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sessions, files, search, git and the macOS Accessibility calls behind the picker, and a React frontend with [xterm.js](https://xtermjs.org) for the terminal and [CodeMirror](https://codemirror.net) for the editor. The app is about 18 MB, 7.5 MB as a download.
+
+## Why Lookout
+
+- **Built for Claude Code.** Open a Claude session in a tab with keys already set up for its prompt, and see at a glance which tabs are running Claude.
+- **A picker for the whole screen.** Click any element in any app and send it to Claude with a screenshot and details, like Cursor's picker but across your whole Mac.
+- **A full workspace.** A VS Code-style file explorer, project search, git with diffs, and a code editor, all in one window.
+- **Fast and native.** A real macOS app built in Rust, about 18 MB, that opens instantly. No Electron and no bundled browser.
+- **Free and open source.** MIT licensed, with no account, subscription or telemetry.
 
 ## Features
 
@@ -144,6 +152,18 @@ cargo test
 | [tm-themes](https://github.com/shikijs/textmate-grammars-themes) | Editor theme colors | MIT |
 
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) has more detail.
+
+## FAQ
+
+**Is Lookout free?** Yes. It is free and open source under the MIT license, with no account, subscription or telemetry.
+
+**Do I need Claude Code?** Lookout is a normal terminal and works on its own, but it is built for [Claude Code](https://www.anthropic.com/claude-code) and has shortcuts and a picker made for it.
+
+**What does the element picker do?** You press ⌥⌘E, click anything on screen in any app, and Lookout sends a description and a screenshot of it to your Claude session, so you can ask about it without explaining where it is.
+
+**Does it work on Apple Silicon and Intel Macs?** The prebuilt download is for Apple Silicon (M1 and later), macOS 11 or later. On an Intel Mac you can build it from source.
+
+**Why does it ask for Accessibility and Screen Recording?** Only for the picker: Accessibility lets it read the element you click in other apps, and Screen Recording lets it capture the screenshot. Nothing leaves your Mac.
 
 ## License
 
