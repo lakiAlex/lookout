@@ -4,5 +4,9 @@
 <dict>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
+	<!-- macOS 26: keep the window frame from before the new design, with the
+	     smaller close, minimize and zoom buttons. -->
+	<key>UIDesignRequiresCompatibility</key>
+	<true/>
 </dict>
 </plist>

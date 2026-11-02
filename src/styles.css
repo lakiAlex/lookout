@@ -416,16 +416,19 @@ input[type="checkbox"] {
   position: absolute;
   top: 2px;
   right: 2px;
-  min-width: 15px;
-  height: 15px;
+  /* A circle; three characters ("99+") stretch it a little. */
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--on-accent);
+  border-radius: 999px;
+  background: #f2557a;
+  color: #fff;
   font-size: 9px;
   font-weight: 700;
-  line-height: 15px;
+  line-height: 18px;
   text-align: center;
+  /* Half its width past the button's right edge. */
+  transform: translateX(50%);
 }
 
 .activity-spacer {
@@ -473,16 +476,22 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   opacity: 0 !important;
 }
 
-/* A smaller light/dark switch than the base style, with larger icons. */
+/* A smaller light/dark switch than the base style, with larger icons. Same
+   height, corners, color and ring as the git button next to it. */
 .theme-switch {
-  padding: 2px;
+  padding: 3px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .theme-thumb {
-  top: 2px;
-  left: 2px;
+  top: 3px;
+  left: 3px;
   width: 25px;
-  height: 19px;
+  height: 20px;
+  border-radius: 5px;
   transform-origin: left center;
 }
 
@@ -492,7 +501,7 @@ body:has(.context-menu) .activity-button[data-tip]::after {
 
 .theme-option {
   width: 25px;
-  height: 19px;
+  height: 20px;
 }
 
 /* On a click the knob stretches toward the other side, then settles with a small bounce. */
@@ -1510,12 +1519,12 @@ body:has(.context-menu) .activity-button[data-tip]::after {
 .app.compact .activity-badge {
   top: -3px;
   right: -3px;
-  min-width: 12px;
-  height: 12px;
+  min-width: 14px;
+  height: 14px;
   padding: 0 3px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 8px;
-  line-height: 12px;
+  line-height: 14px;
 }
 
 /* ---- Meme button ---- */
@@ -1720,10 +1729,11 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   padding: 0 9px;
   border: none;
   border-radius: 8px;
-  background: var(--group-bg);
-  box-shadow: var(--group-ring);
+  /* The top bar's color with a thin ring, filled in on hover. */
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   color: var(--fg-2);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1761,8 +1771,9 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   color: var(--git-added);
 }
 
+/* The same pink-red as the change count on the sidebar's git icon. */
 .git-chip-removed {
-  color: var(--git-deleted);
+  color: #f2557a;
 }
 
 /* A number that changed slides in from below. */
@@ -2237,4 +2248,45 @@ body:has(.context-menu) .activity-button[data-tip]::after {
     animation-duration: 0.01s !important;
     animation-delay: 0s !important;
   }
+}
+
+/* ---- Files panel: dragging and dropping ---- */
+
+.tree {
+  outline: none;
+  border-radius: 8px;
+  transition: box-shadow 0.12s ease;
+}
+
+/* Several rows selected read as one block. */
+.tree-row.selected {
+  user-select: none;
+}
+
+/* The folder a drag drops into: a ring in the accent color. */
+.tree-row.drop-target {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.tree.drop-target {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+
+.tree-ghost {
+  position: fixed;
+  z-index: 80;
+  max-width: 220px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: var(--raised);
+  box-shadow: var(--raised-shadow), var(--shadow-menu);
+  color: var(--fg-strong);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  animation: ghost-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.25);
 }

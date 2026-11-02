@@ -1,6 +1,6 @@
 // The app's icons: Hugeicons stroke-rounded (MIT, https://hugeicons.com), under the
-// names the components use. The dog and the title bar's terminal glyph stay Lucide:
-// Hugeicons has no dog, and the glyph matches the app icon.
+// names the components use. The title bar's terminal glyph stays Lucide, since it
+// matches the app icon.
 import {
   ArrowDown01Icon,
   ArrowDown02Icon,
@@ -13,6 +13,7 @@ import {
   Cancel01Icon,
   CancelCircleIcon,
   CaseSensitiveIcon,
+  CatIcon,
   CheckmarkCircle02Icon,
   CleanIcon,
   ClipboardIcon,
@@ -22,6 +23,7 @@ import {
   Delete02Icon,
   File01Icon,
   FileAddIcon,
+  GitCommitIcon,
   FolderAddIcon,
   FolderOpenIcon,
   GitBranchIcon,
@@ -53,7 +55,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
-export { Dog, Terminal } from "lucide-react";
+export { Terminal } from "lucide-react";
 
 interface IconProps {
   size?: number;
@@ -75,6 +77,7 @@ export const AppWindow = icon(BrowserIcon);
 export const Bell = icon(NotificationSquareIcon);
 export const BrushCleaning = icon(CleanIcon);
 export const CaseSensitive = icon(CaseSensitiveIcon);
+export const Cat = icon(CatIcon);
 export const Check = icon(Tick02Icon);
 export const CircleCheck = icon(CheckmarkCircle02Icon);
 export const CircleX = icon(CancelCircleIcon);
@@ -87,6 +90,7 @@ export const ClipboardCopy = icon(ClipboardIcon);
 export const Code = icon(SourceCodeIcon);
 export const Copy = icon(Copy01Icon);
 export const Ellipsis = icon(MoreHorizontalIcon);
+export const GitCommit = icon(GitCommitIcon);
 export const FilePlus2 = icon(FileAddIcon);
 export const FileText = icon(File01Icon);
 export const FolderOpen = icon(FolderOpenIcon);

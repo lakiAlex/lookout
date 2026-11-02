@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -12,7 +13,7 @@ import {
   ClipboardCopy,
   Code,
   Copy,
-  Dog,
+  Cat,
   FilePlus2,
   FolderOpen,
   FolderPlus,
@@ -649,14 +650,70 @@ export default function App() {
     addTab({ kind: "terminal", id, cwd: latest.current.folder, run: "claude", sessionId: null, title: "claude", claude: false });
   };
 
-  const mentionInClaude = (path: string) => {
+  const mentionInClaude = (paths: string[]) => {
     const tab = targetTerminal();
     const root = latest.current.folder;
     if (!tab) return toast("error", "Open a terminal first");
-    terminals.get(tab.id)?.paste(`@${root ? relative(root, path) : path} `);
+    terminals.get(tab.id)?.paste(paths.map((path) => `@${root ? relative(root, path) : path} `).join(""));
     setActiveId(tab.id);
     terminals.get(tab.id)?.focus();
   };
+
+  /** Asks, then moves files and folders to the Trash and closes their tabs. */
+  const trashEntries = (entries: Entry[]) => {
+    if (!entries.length) return;
+    const one = entries.length === 1 ? entries[0] : null;
+    setDialog({
+      type: "choice",
+      title: one ? `Move ${one.name} to the Trash?` : `Move ${entries.length} items to the Trash?`,
+      message: entries.some((e) => e.dir) ? "Folders go to the Trash with everything in them." : "You can put them back from the Trash.",
+      actions: [
+        {
+          label: "Move to Trash",
+          kind: "primary",
+          onClick: () => {
+            setDialog(null);
+            const paths = entries.map((e) => e.path);
+            api.trashPaths(paths).then(
+              () => {
+                for (const t of latest.current.tabs) {
+                  if (t.kind === "file" && paths.some((p) => t.path === p || t.path.startsWith(p + "/"))) closeTab(t.id, true);
+                }
+              },
+              (err) => toast("error", toAppError(err).message),
+            );
+          },
+        },
+      ],
+    });
+  };
+
+  /** Open files follow files and folders moved in the Files panel. */
+  const filesMoved = (moves: [string, string][]) =>
+    setTabs((l) =>
+      l.map((t) => {
+        if (t.kind !== "file") return t;
+        for (const [from, to] of moves) {
+          if (t.path === from || t.path.startsWith(from + "/")) return { ...t, path: to + t.path.slice(from.length) };
+        }
+        return t;
+      }),
+    );
+
+  // Files dropped on a terminal are typed into it as paths, as in Terminal.
+  useEffect(() => {
+    const un = getCurrentWebview().onDragDropEvent((event) => {
+      const drop = event.payload;
+      if (drop.type !== "drop" || !drop.paths.length) return;
+      const el = document.elementFromPoint(drop.position.x / window.devicePixelRatio, drop.position.y / window.devicePixelRatio);
+      const tab = latest.current.tabs.find((t) => t.id === latest.current.activeId);
+      if (!el?.closest(".terminal-view") || tab?.kind !== "terminal") return;
+      const quoted = drop.paths.map((p) => (/^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`));
+      terminals.get(tab.id)?.paste(quoted.join(" ") + " ");
+      terminals.get(tab.id)?.focus();
+    });
+    return () => void un.then((f) => f());
+  }, []);
 
   const sendPickRef = useRef(sendPick);
   sendPickRef.current = sendPick;
@@ -670,6 +727,12 @@ export default function App() {
     const start: WindowStart = { folder: latest.current.folder, tab: null };
     void api.windowNew({ start, session: null, x: null, y: null }).catch((e) => toast("error", toAppError(e).message));
   }, [toast]);
+
+  // New Window in the Dock menu goes to the window used last.
+  useEffect(() => {
+    const un = appWindow.listen("new-window", newWindow);
+    return () => void un.then((f) => f());
+  }, [newWindow]);
 
   /** Moves a tab to its own window, at the drop point when dragged there. A
    * terminal keeps its shell and what is on screen. */
@@ -716,13 +779,28 @@ export default function App() {
 
   // ---- Menus ----
 
-  const fileMenu = (e: ReactMouseEvent, entry: Entry | null, actions: { newFile: () => void; newFolder: () => void; rename: () => void }) => {
+  const fileMenu = (e: ReactMouseEvent, entries: Entry[], actions: { newFile: () => void; newFolder: () => void; rename: () => void }) => {
     const root = latest.current.folder!;
     const items: MenuEntry[] = [];
+    if (entries.length > 1) {
+      // Several selected: what works on all of them at once.
+      const paths = entries.map((x) => x.path);
+      items.push(
+        { label: `Mention ${entries.length} Items in Claude`, icon: <AtSign size={14} />, onSelect: () => mentionInClaude(paths) },
+        "separator",
+        { label: "Copy Paths", icon: <Copy size={14} />, onSelect: () => void writeText(paths.join("\n")) },
+        { label: "Copy Relative Paths", icon: <Copy size={14} />, onSelect: () => void writeText(paths.map((p) => relative(root, p)).join("\n")) },
+        "separator",
+        { label: `Move ${entries.length} Items to Trash`, icon: <Trash2 size={14} />, danger: true, onSelect: () => trashEntries(entries) },
+      );
+      setMenu({ x: e.clientX, y: e.clientY, items });
+      return;
+    }
+    const entry = entries[0] ?? null;
     if (entry) {
       if (!entry.dir) items.push({ label: "Open", icon: <FolderOpen size={14} />, onSelect: () => openFile(entry.path, true) });
       items.push(
-        { label: "Mention in Claude", icon: <AtSign size={14} />, onSelect: () => mentionInClaude(entry.path) },
+        { label: "Mention in Claude", icon: <AtSign size={14} />, onSelect: () => mentionInClaude([entry.path]) },
         { label: "Open in Terminal", icon: <SquareTerminal size={14} />, onSelect: () => newTerminal(false, entry.dir ? entry.path : dirname(entry.path)) },
         { label: "Reveal in Finder", icon: <FolderOpen size={14} />, onSelect: () => void revealItemInDir(entry.path) },
         "separator",
@@ -739,32 +817,7 @@ export default function App() {
       items.push(
         "separator",
         { label: "Rename…", icon: <Pencil size={14} />, onSelect: actions.rename },
-        {
-          label: "Move to Trash",
-          icon: <Trash2 size={14} />,
-          danger: true,
-          onSelect: () =>
-            setDialog({
-              type: "choice",
-              title: `Move ${entry.name} to the Trash?`,
-              message: entry.dir ? "The folder and everything in it goes to the Trash." : "You can put it back from the Trash.",
-              actions: [
-                {
-                  label: "Move to Trash",
-                  kind: "primary",
-                  onClick: () => {
-                    setDialog(null);
-                    api.trashPaths([entry.path]).then(
-                      () => {
-                        for (const t of latest.current.tabs) if (t.kind === "file" && (t.path === entry.path || t.path.startsWith(entry.path + "/"))) closeTab(t.id, true);
-                      },
-                      (err) => toast("error", toAppError(err).message),
-                    );
-                  },
-                },
-              ],
-            }),
-        },
+        { label: "Move to Trash", icon: <Trash2 size={14} />, danger: true, onSelect: () => trashEntries([entry]) },
       );
     }
     setMenu({ x: e.clientX, y: e.clientY, items });
@@ -786,7 +839,7 @@ export default function App() {
     if (tab.kind === "file") {
       items.push(
         "separator",
-        { label: "Mention in Claude", icon: <AtSign size={14} />, onSelect: () => mentionInClaude(tab.path) },
+        { label: "Mention in Claude", icon: <AtSign size={14} />, onSelect: () => mentionInClaude([tab.path]) },
         { label: "Reveal in Finder", icon: <FolderOpen size={14} />, onSelect: () => void revealItemInDir(tab.path) },
         { label: "Copy Path", icon: <Copy size={14} />, onSelect: () => void writeText(tab.path) },
       );
@@ -1131,7 +1184,7 @@ export default function App() {
         "separator",
         {
           label: "Memes",
-          icon: <Dog size={14} />,
+          icon: <Cat size={14} />,
           detail: memes ? "On" : "Off",
           submenu: {
             items: [true, false].map((on) => ({
@@ -1210,7 +1263,6 @@ export default function App() {
         </TabBar>
         <div className="titlebar-actions">
           {git && <GitChip status={git} open={panel === "git"} onClick={() => setPanel((p) => (p === "git" ? null : "git"))} />}
-          <NotificationBell notices={notices} onOpen={(n) => void api.noticeOpen(n.id)} />
           <button
             type="button"
             role="switch"
@@ -1230,6 +1282,7 @@ export default function App() {
               <Moon size={12.5} strokeWidth={1.9} />
             </span>
           </button>
+          <NotificationBell notices={notices} onOpen={(n) => void api.noticeOpen(n.id)} />
         </div>
       </header>
 
@@ -1281,6 +1334,8 @@ export default function App() {
                 activePath={active?.kind === "file" ? active.path : null}
                 onOpen={(path, pin) => openFile(path, pin)}
                 onMenu={fileMenu}
+                onTrash={trashEntries}
+                onMoved={filesMoved}
                 onError={(m) => toast("error", m)}
               />
             )}

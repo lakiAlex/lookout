@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Dog, RefreshCw, X } from "./icons";
+import { Cat, RefreshCw, X } from "./icons";
 import { useCallback, useEffect, useState } from "react";
 
 /** Subreddits to pick from; meme-api.com serves a random post from one. */
@@ -59,7 +59,7 @@ export function MemeButton() {
           load();
         }}
       >
-        <Dog size={19} />
+        <Cat size={19} />
       </button>
       {open && (
         <div className="meme-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>

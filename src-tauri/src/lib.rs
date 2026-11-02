@@ -173,6 +173,16 @@ fn trash_paths(paths: Vec<String>) -> AppResult<()> {
 }
 
 #[tauri::command]
+async fn copy_paths(paths: Vec<String>, dir: String) -> AppResult<Vec<String>> {
+    tauri::async_runtime::spawn_blocking(move || files::copy_into(&paths, &dir)).await.map_err(|e| AppError::other(e.to_string()))?
+}
+
+#[tauri::command]
+fn move_paths(paths: Vec<String>, dir: String) -> AppResult<Vec<(String, String)>> {
+    files::move_into(&paths, &dir)
+}
+
+#[tauri::command]
 fn watch_folder(app: AppHandle, window: Window, state: State<AppState>, path: String) -> AppResult<()> {
     let watcher = files::watch(app, window.label(), &path)?;
     state.watchers.lock().unwrap().insert(window.label().to_string(), watcher);
@@ -282,7 +292,7 @@ async fn git_show(root: String, rev: String, path: String) -> AppResult<String> 
 /// Async, so the window is built off the thread that runs commands.
 #[tauri::command]
 async fn window_new(app: AppHandle, window: Window, request: NewWindow) -> AppResult<String> {
-    let label = app.state::<Windows>().open(&app, &window, &request)?;
+    let label = app.state::<Windows>().open(&app, Some(&window), &request)?;
     if let Some(session) = &request.session {
         app.state::<AppState>().sessions.set_owner(session, &label);
     }
@@ -382,6 +392,8 @@ pub fn run() {
             });
             app.manage(Windows::default());
             app.manage(Notices::default());
+            #[cfg(target_os = "macos")]
+            windows::install_dock_menu();
             picker::log(app.handle(), &format!("launch: accessibility trusted = {}", picker::has_permission()));
             let handle = app.handle().clone();
             std::thread::spawn(move || {
@@ -391,6 +403,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(on_window_event)
+        .on_menu_event(|app, event| {
+            if event.id() == windows::NEW_WINDOW_ITEM {
+                windows::new_window_from_dock(app);
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             picker_start,
             picker_cancel,
@@ -412,6 +429,8 @@ pub fn run() {
             create_path,
             rename_path,
             trash_paths,
+            copy_paths,
+            move_paths,
             watch_folder,
             home_dir,
             recent_folders,

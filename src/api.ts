@@ -153,6 +153,10 @@ export const api = {
   createPath: (path: string, dir: boolean) => invoke<void>("create_path", { path, dir }),
   renamePath: (from: string, to: string) => invoke<void>("rename_path", { from, to }),
   trashPaths: (paths: string[]) => invoke<void>("trash_paths", { paths }),
+  /** Copies into `dir`; taken names get a number. Returns the new paths. */
+  copyPaths: (paths: string[], dir: string) => invoke<string[]>("copy_paths", { paths, dir }),
+  /** Moves into `dir`. Returns [old, new] for each item that moved. */
+  movePaths: (paths: string[], dir: string) => invoke<[string, string][]>("move_paths", { paths, dir }),
   watchFolder: (path: string) => invoke<void>("watch_folder", { path }),
   homeDir: () => invoke<string>("home_dir"),
   recentFolders: () => invoke<string[]>("recent_folders"),

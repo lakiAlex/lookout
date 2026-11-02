@@ -30,7 +30,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 
 **Windows**
 
-- ⌘N opens another window on the same folder. Each window has its own folder, tabs and panels, and closing a window ends its terminals.
+- ⌘N, or New Window in the Dock icon's menu, opens another window on the same folder. Each window has its own folder, tabs and panels, and closing a window ends its terminals.
 - Drag a tab along the tab bar to reorder it, or drag it down out of the bar and let go to open it in a window of its own. A terminal keeps running and keeps what is on screen, and a file keeps unsaved changes. The tab's menu has Move to New Window too.
 - ⇧⌘W closes the window.
 
@@ -51,6 +51,8 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 
 - An explorer like VS Code's, with file icons, git status colors, dimmed ignored files and live updates when files change on disk.
 - New file, new folder, rename, move to Trash, reveal in Finder, copy path or relative path, open a terminal in a folder, and Mention in Claude, which types `@path` into the Claude tab.
+- ⌘-click and ⇧-click select several files and folders, and ⌘A selects all shown. The menu then mentions, copies the paths of, or trashes all of them; ⌘⌫ moves the selection to the Trash.
+- Drag files from Finder or another app onto a folder to copy them there, or onto the empty space to copy them to the project's top folder. A name that is taken gets a number, as in Finder. Drag files inside the tree to move them into another folder; open tabs follow. Files dropped on a terminal are typed in as paths.
 - Quick open with ⌘P.
 
 **Search**
@@ -74,7 +76,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 - The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), code font for the terminal and the editor (SF Mono, Geist Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), interface font (SF Pro or Geist), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, the last login message, scrollback length, the element picker on or off, word wrap in the editor, Mac notifications, and memes. Geist and Geist Mono ship with Lookout.
 - Settings changed in one window apply to the other windows.
 - The sidebar minimizes to a narrow strip with small icons.
-- The dog button in the corner shows a random meme from Reddit through [meme-api.com](https://github.com/D3vd/Meme_Api), skipping posts marked NSFW. Settings > Memes turns it off.
+- The cat button in the corner shows a random meme from Reddit through [meme-api.com](https://github.com/D3vd/Meme_Api), skipping posts marked NSFW. Settings > Memes turns it off.
 
 ## Keyboard shortcuts
 
@@ -165,7 +167,7 @@ cargo test
 | [zsh-syntax-highlighting](https://github.com/zsh-users/zsh-syntax-highlighting) | Command highlighting in zsh | BSD-3-Clause |
 | [Icons - Maintained](https://github.com/yusifaliyevpro/vscode-icons) | File icons in the explorer and tabs | MIT |
 | [Hugeicons](https://hugeicons.com) | Icons | MIT |
-| [Lucide](https://lucide.dev) | The dog and the title bar glyph | ISC |
+| [Lucide](https://lucide.dev) | The title bar glyph | ISC |
 | [Geist and Geist Mono](https://vercel.com/font) | Interface and code fonts | OFL-1.1 |
 | [iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes) | Terminal theme colors | MIT |
 | [tm-themes](https://github.com/shikijs/textmate-grammars-themes) | Editor theme colors | MIT |

@@ -1,5 +1,5 @@
 import type { GitStatus } from "../api";
-import { Check, GitCompare } from "./icons";
+import { Check, GitCommit } from "./icons";
 
 /** The changes in the folder's repository, in the title bar: changed files
  * and lines added and removed. A click opens Source Control. */
@@ -11,7 +11,7 @@ export function GitChip(props: { status: GitStatus; open: boolean; onClick: () =
     : "No changes. Source Control (⌃⇧G)";
   return (
     <button type="button" className={`git-chip${props.open ? " open" : ""}${count ? "" : " clean"}`} title={tip} aria-label={tip} onClick={props.onClick}>
-      {count ? <GitCompare size={13} /> : <Check size={13} />}
+      {count ? <GitCommit size={14} /> : <Check size={13} />}
       {count > 0 && (
         <>
           {/* Keyed on the value, so a changed number plays its tick animation. */}

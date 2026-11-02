@@ -160,6 +160,82 @@ pub fn rename(from: &str, to: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// A name in `dir` that is free, numbered as Finder does: "notes 2.md",
+/// "notes 3.md". Folders and dot files get the number at the end.
+fn free_name(dir: &Path, name: &str) -> PathBuf {
+    let first = dir.join(name);
+    if std::fs::symlink_metadata(&first).is_err() {
+        return first;
+    }
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 && !dir.join(name).is_dir() => (&name[..i], &name[i..]),
+        _ => (name, ""),
+    };
+    (2..)
+        .map(|n| dir.join(format!("{stem} {n}{ext}")))
+        .find(|p| std::fs::symlink_metadata(p).is_err())
+        .unwrap()
+}
+
+/// Copies a file or folder, with symlinks copied as links.
+fn copy_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    let meta = std::fs::symlink_metadata(from)?;
+    if meta.file_type().is_symlink() {
+        std::os::unix::fs::symlink(std::fs::read_link(from)?, to)
+    } else if meta.is_dir() {
+        std::fs::create_dir(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let entry = entry?;
+            copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        Ok(())
+    } else {
+        std::fs::copy(from, to).map(|_| ())
+    }
+}
+
+/// Copies files and folders dropped from Finder into `dir`. A name that is
+/// taken gets a number. Returns the new paths.
+pub fn copy_into(sources: &[String], dir: &str) -> AppResult<Vec<String>> {
+    let target = Path::new(dir);
+    let mut copied = Vec::new();
+    for source in sources {
+        let from = Path::new(source);
+        let name = from.file_name().and_then(|n| n.to_str()).ok_or_else(|| AppError::other(format!("Cannot copy {source}")))?;
+        if target.starts_with(from) {
+            return Err(AppError::new("inside", format!("{name} cannot be copied into itself")));
+        }
+        let to = free_name(target, name);
+        copy_tree(from, &to).map_err(|e| AppError::other(format!("Could not copy {name}: {e}")))?;
+        copied.push(to.to_string_lossy().into_owned());
+    }
+    Ok(copied)
+}
+
+/// Moves files and folders into `dir`, for drags inside the Files panel.
+/// Returns each old path with its new one; items already in `dir` stay.
+pub fn move_into(sources: &[String], dir: &str) -> AppResult<Vec<(String, String)>> {
+    let target = Path::new(dir);
+    let mut moved = Vec::new();
+    for source in sources {
+        let from = Path::new(source);
+        let name = from.file_name().and_then(|n| n.to_str()).ok_or_else(|| AppError::other(format!("Cannot move {source}")))?;
+        if from.parent() == Some(target) {
+            continue;
+        }
+        if target.starts_with(from) {
+            return Err(AppError::new("inside", format!("{name} cannot be moved into itself")));
+        }
+        let to = target.join(name);
+        if std::fs::symlink_metadata(&to).is_ok() {
+            return Err(AppError::new("exists", format!("{name} already exists in {}", target.file_name().and_then(|n| n.to_str()).unwrap_or(dir))));
+        }
+        std::fs::rename(from, &to)?;
+        moved.push((source.clone(), to.to_string_lossy().into_owned()));
+    }
+    Ok(moved)
+}
+
 pub fn move_to_trash(paths: &[String]) -> AppResult<()> {
     trash::delete_all(paths).map_err(|e| AppError::other(format!("Could not move to the Trash: {e}")))
 }
@@ -209,4 +285,53 @@ pub fn watch(app: AppHandle, window: &str, root: &str) -> AppResult<notify::Reco
         }
     });
     Ok(watcher)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("lookout-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn numbers_taken_names() {
+        let dir = temp("names");
+        std::fs::write(dir.join("notes.md"), "").unwrap();
+        std::fs::write(dir.join("notes 2.md"), "").unwrap();
+        std::fs::create_dir(dir.join("src")).unwrap();
+        assert_eq!(free_name(&dir, "notes.md"), dir.join("notes 3.md"));
+        assert_eq!(free_name(&dir, "src"), dir.join("src 2"));
+        assert_eq!(free_name(&dir, "new.txt"), dir.join("new.txt"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn copies_and_moves_folders() {
+        let dir = temp("copy");
+        let outside = dir.join("Desktop");
+        std::fs::create_dir_all(outside.join("pics/inner")).unwrap();
+        std::fs::write(outside.join("pics/inner/a.txt"), "a").unwrap();
+        let project = dir.join("project");
+        std::fs::create_dir_all(project.join("assets")).unwrap();
+        let source = outside.join("pics").to_string_lossy().into_owned();
+
+        let copied = copy_into(&[source.clone()], project.to_str().unwrap()).unwrap();
+        assert_eq!(std::fs::read_to_string(project.join("pics/inner/a.txt")).unwrap(), "a");
+        assert!(outside.join("pics/inner/a.txt").exists(), "the original stays");
+        copy_into(&[source], project.to_str().unwrap()).unwrap();
+        assert!(project.join("pics 2/inner/a.txt").exists());
+
+        let assets = project.join("assets").to_string_lossy().into_owned();
+        let moved = move_into(&copied, &assets).unwrap();
+        assert_eq!(moved, vec![(copied[0].clone(), project.join("assets/pics").to_string_lossy().into_owned())]);
+        assert!(project.join("assets/pics/inner/a.txt").exists());
+        assert!(move_into(&[assets.clone()], &format!("{assets}/pics")).is_err(), "not into itself");
+        assert!(move_into(&[format!("{assets}/pics")], &assets).unwrap().is_empty(), "already there");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }
