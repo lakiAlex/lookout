@@ -3,7 +3,7 @@
   <img src="docs/title-light.png" width="174" height="44" alt="Lookout">
 </picture>
 
-Lookout is an extremely snappy, lightweight, open-source terminal for macOS built for Claude Code. Use Claude in the terminal with a VS Code-style file explorer, search, git and editor, and pick any element on your screen, in any app, to send straight to Claude.
+Lookout is a macOS terminal built around Claude Code. Run Claude next to a VS Code-style file explorer, search, git and a code editor, and pick any element on your screen, in any app, to send straight to Claude. Free and open source.
 
 ![Lookout in use: an element picked in Chrome is pasted into Claude Code, Claude answers and edits the code, then the Files and Source Control panels, light mode and the settings menu](docs/demo.gif)
 
@@ -14,7 +14,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 - **Built for Claude Code.** Open a Claude session in a tab with keys already set up for its prompt, and see at a glance which tabs are running Claude.
 - **A picker for the whole screen.** Click any element in any app, a button in a browser, a row in another program, anything on screen, and send it to Claude with a screenshot and the details, so you never have to describe what you mean.
 - **A full workspace.** A VS Code-style file explorer, project search, git with diffs, and a code editor, all in one window.
-- **Fast and native.** A real macOS app built in Rust, about 18 MB, that opens instantly. No Electron and no bundled browser.
+- **Snappy and native.** A real macOS app built in Rust, about 18 MB, that opens instantly. No Electron and no bundled browser.
 - **Free and open source.** MIT licensed, with no account, subscription or telemetry.
 
 ## Features
