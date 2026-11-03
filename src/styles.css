@@ -1851,7 +1851,7 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   height: 14px;
   padding: 0 3px;
   border-radius: 7px;
-  background: var(--claude);
+  background: #f2557a;
   box-shadow: 0 0 0 2px var(--chrome);
   color: #fff;
   font-size: 9px;
