@@ -208,6 +208,11 @@ impl Sessions {
         }
     }
 
+    /// Every session's id and shell pid, for finding what runs in the terminals.
+    pub fn shell_pids(&self) -> Vec<(String, i32)> {
+        self.0.lock().unwrap().iter().filter_map(|(id, s)| Some((id.clone(), s.shell_pid?))).collect()
+    }
+
     /// Ends the sessions of a window that closed.
     pub fn kill_owned_by(&self, owner: &str) {
         let mut sessions = self.0.lock().unwrap();

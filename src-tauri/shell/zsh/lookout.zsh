@@ -36,9 +36,10 @@ _lookout_precmd() {
 add-zsh-hook preexec _lookout_preexec
 precmd_functions=(_lookout_precmd $precmd_functions)
 
-# Claude Code started here loads claude-settings.json, whose Stop and
-# Notification hooks write the hook's JSON to this terminal as OSC 7701
-# "claude;<base64>". Lookout then knows when Claude is done or waiting. The
+# Claude Code started here loads claude-settings.json, whose hooks (session
+# start, prompt, tool use, stop and notification) write the hook's JSON to this
+# terminal as OSC 7701 "claude;<base64>". Lookout then knows when Claude is
+# working, done or waiting. The
 # user's own settings and hooks load as usual.
 export LOOKOUT_TTY=$TTY
 typeset -g _lookout_claude_settings=${LOOKOUT_ZDOTDIR:h}/claude-settings.json

@@ -23,6 +23,8 @@ export interface Settings {
   banners: boolean;
   /** "Last login: ..." at the top of new terminals, as in Terminal. */
   lastLogin: boolean;
+  /** Claude conversations open when Lookout quit are resumed in tabs at launch. */
+  restoreClaude: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   picker: true,
   banners: true,
   lastLogin: true,
+  restoreClaude: true,
 };
 
 const KEY = "lookout.settings";

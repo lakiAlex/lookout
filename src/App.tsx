@@ -1,6 +1,6 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getAllWebviewWindows, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -15,10 +15,12 @@ import {
   Copy,
   Cat,
   FilePlus2,
+  FileText,
   FolderOpen,
   FolderPlus,
   GitBranch,
   GitCompare,
+  History,
   Keyboard,
   LogIn,
   Moon,
@@ -27,6 +29,7 @@ import {
   Plus,
   Rows3,
   ScrollText,
+  Split,
   Claude,
   SquareTerminal,
   Sun,
@@ -48,6 +51,9 @@ import { editors, EditorView } from "./components/EditorView";
 import { FilesPanel, type GitMark } from "./components/FilesPanel";
 import { GitChip } from "./components/GitChip";
 import { GitPanel } from "./components/GitPanel";
+import { CommandPalette, type Command as PaletteCommand } from "./components/CommandPalette";
+import { formatCost, formatTokens, HistoryButton } from "./components/History";
+import { PortsButton } from "./components/Ports";
 import { noticeFor, NoticePeeks, NotificationBell } from "./components/Notifications";
 import { QuickOpen } from "./components/QuickOpen";
 import { SearchPanel } from "./components/SearchPanel";
@@ -67,17 +73,20 @@ import {
   uiFontCss,
   type Settings,
 } from "./lib/settings";
-import { newTabId, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
+import { newTabId, type ClaudeState, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
 import { savedTerminalTheme, TERMINAL_THEME_KEY, TERMINAL_THEMES, terminalColors } from "./lib/terminalThemes";
 import { iconUrl } from "./icons";
 import appIcon from "../src-tauri/icons/128x128@2x.png";
 
 const THEME_KEY = "lookout.theme";
-const SIDE_KEY = "lookout.sideWidth";
+/** v2: the default became narrower, so widths saved for the old default are not used. */
+const SIDE_KEY = "lookout.sideWidth.v2";
 const FONT_KEY = "lookout.fontSize";
 const COMPACT_KEY = "lookout.compactBar";
 const MEMES_KEY = "lookout.memes";
 const SETTINGS_KEY = "lookout.settings";
+/** The Claude conversations open in a window, by window label, for reopening them at launch. */
+const CLAUDE_TABS_KEY = "lookout.claudeTabs.";
 const CURSOR_LABELS = { underline: "Underline", bar: "Bar", block: "Block" } as const;
 
 /** This window. Events are listened to here, so one window does not get another's. */
@@ -97,6 +106,32 @@ interface Toast {
 }
 
 const newId = newTabId;
+
+/** The tabs with their own place in the tab bar: all but the right halves of splits. */
+function shownTabs(list: Tab[]): Tab[] {
+  return list.filter((t) => !(t.kind === "terminal" && t.parent && list.some((p) => p.id === t.parent)));
+}
+
+/** The right half of a split terminal tab, if it has one. */
+function paneOf(list: Tab[], id: string): Tab | undefined {
+  return list.find((t) => t.kind === "terminal" && t.parent === id);
+}
+
+/** A tab that runs `claude --resume` for a past conversation. */
+function resumeTab(id: string, cwd: string | null, title: string | null): Tab {
+  return {
+    kind: "terminal",
+    id: newId(),
+    cwd,
+    run: `claude --resume ${id}`,
+    sessionId: null,
+    title: title ?? "claude",
+    claude: false,
+    sessionName: title ?? undefined,
+    claudeSession: id,
+    claudeCwd: cwd ?? undefined,
+  };
+}
 
 function markFor(file: GitFile): GitMark {
   if (file.index === "U") return { letter: "!", kind: "conflict" };
@@ -123,7 +158,21 @@ export default function App() {
   const [started, setStarted] = useState(false);
   // The side panel opens from the icons on the left and is closed at start.
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [sideWidth, setSideWidth] = useState(() => Number(localStorage.getItem(SIDE_KEY)) || 280);
+  const [sideWidth, setSideWidth] = useState(() => Number(localStorage.getItem(SIDE_KEY)) || 240);
+  /** The panel that just closed, kept on screen while the side panel narrows away. */
+  const [closingPanel, setClosingPanel] = useState<Panel | null>(null);
+  const shownPanelRef = useRef<Panel | null>(null);
+  useEffect(() => {
+    if (panel) {
+      shownPanelRef.current = panel;
+      setClosingPanel(null);
+      return;
+    }
+    setClosingPanel(shownPanelRef.current);
+    const timer = setTimeout(() => setClosingPanel(null), 320);
+    return () => clearTimeout(timer);
+  }, [panel]);
+  const sidePanel = panel ?? closingPanel;
   /** The left icon bar minimized to small icons. */
   const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) === "1");
   /** The meme button in the corner. */
@@ -157,6 +206,11 @@ export default function App() {
   const [notices, setNotices] = useState<Notice[]>([]);
   /** Notifications popping up under the bell in this window. */
   const [peeks, setPeeks] = useState<Notice[]>([]);
+  /** Bumped by ⌘Y to open the history panel. */
+  const [historySignal, setHistorySignal] = useState(0);
+  const [palette, setPalette] = useState(false);
+  /** The left half's share of the width of a split tab, by the tab's id. */
+  const [splitRatio, setSplitRatio] = useState<Record<string, number>>({});
 
   const latest = useRef({ tabs, activeId, folder, git, panel, settings });
   latest.current = { tabs, activeId, folder, git, panel, settings };
@@ -263,11 +317,29 @@ export default function App() {
       return;
     }
     setTabs((list) => {
-      const index = list.findIndex((t) => t.id === id);
-      const next = list.filter((t) => t.id !== id);
-      if (latest.current.activeId === id) setActiveId(next[Math.min(index, next.length - 1)]?.id ?? null);
+      const index = shownTabs(list).findIndex((t) => t.id === id);
+      // A split tab's right half closes with it.
+      const next = list.filter((t) => t.id !== id && !(t.kind === "terminal" && t.parent === id));
+      const shown = shownTabs(next);
+      if (latest.current.activeId === id) setActiveId(shown[Math.min(index, shown.length - 1)]?.id ?? null);
       return next;
     });
+  }, []);
+
+  /** Opens a second terminal on the right half of a terminal tab, in the same folder. */
+  const splitTerminal = useCallback(async (id: string) => {
+    const tab = latest.current.tabs.find((t) => t.id === id);
+    if (tab?.kind !== "terminal" || tab.parent) return;
+    const existing = paneOf(latest.current.tabs, id);
+    if (existing) return terminals.get(existing.id)?.focus();
+    const info = tab.sessionId ? await api.ptyInfo(tab.sessionId).catch(() => null) : null;
+    const pane: Tab = { kind: "terminal", id: newId(), cwd: info?.cwd ?? tab.cwd ?? latest.current.folder, run: null, sessionId: null, title: "zsh", claude: false, parent: id };
+    setTabs((l) => {
+      const next = [...l];
+      next.splice(l.findIndex((t) => t.id === id) + 1, 0, pane);
+      return next;
+    });
+    setActiveId(id);
   }, []);
 
   const openFile = useCallback(
@@ -371,14 +443,46 @@ export default function App() {
       );
       return;
     }
-    // Claude's hooks name the session's transcript, which has the session's name.
-    if (event.type === "claude" && event.hook.transcript_path) {
-      void api.claudeTitle(event.hook.transcript_path).then((sessionName) => {
-        if (!sessionName) return;
-        setTabs((l) =>
-          l.map((t) => (t.id === tabId && t.kind === "terminal" ? { ...t, sessionName, title: t.claude ? sessionName : t.title } : t)),
-        );
-      });
+    if (event.type === "claude") {
+      const hook = event.hook;
+      const name = hook.hook_event_name;
+      // null leaves the dot as it is.
+      let state: ClaudeState | undefined | null = null;
+      if (name === "UserPromptSubmit" || name === "PostToolUse") state = "working";
+      else if (name === "Stop" && !hook.stop_hook_active) state = "done";
+      else if (name === "Notification" && hook.notification_type !== "idle_prompt" && !/waiting for your input/i.test(hook.message ?? "")) state = "waiting";
+      else if (name === "SessionStart") state = undefined;
+      const { activeId: current } = latest.current;
+      const inView = tabId === current || tab.parent === current;
+      setTabs((l) =>
+        l.map((t) =>
+          t.id === tabId && t.kind === "terminal"
+            ? {
+                ...t,
+                claudeSession: hook.session_id ?? t.claudeSession,
+                claudeCwd: hook.cwd ?? t.claudeCwd,
+                // A tab in view needs no dot to say Claude is done.
+                claudeState: state === null ? t.claudeState : inView && state !== "working" ? undefined : state,
+              }
+            : t,
+        ),
+      );
+      // The transcript has the session's name, and when Claude stops, its usage so far.
+      const transcript = hook.transcript_path;
+      if (transcript && (name === "SessionStart" || name === "Stop" || name === "Notification")) {
+        void api.claudeTitle(transcript).then((sessionName) => {
+          if (!sessionName) return;
+          setTabs((l) =>
+            l.map((t) => (t.id === tabId && t.kind === "terminal" ? { ...t, sessionName, title: t.claude ? sessionName : t.title } : t)),
+          );
+        });
+      }
+      if (transcript && name === "Stop") {
+        void api.claudeSessionDetails(transcript).then((d) => {
+          if (!d) return;
+          setTabs((l) => l.map((t) => (t.id === tabId && t.kind === "terminal" ? { ...t, usage: { tokens: d.tokens, cost: d.cost } } : t)));
+        });
+      }
     }
     // Claude's own messages repeat what its hooks report.
     if (event.type === "message" && tab.claude) return;
@@ -401,7 +505,7 @@ export default function App() {
         const title = claude ? claudeTitle(tab) : shell ? (info.cwd ? basename(info.cwd) : program) : program;
         if (title && (title !== tab.title || claude !== tab.claude)) {
           // A Claude that quit takes its session name and topic with it.
-          const names = claude ? {} : { sessionName: undefined, termTitle: undefined };
+          const names = claude ? {} : { sessionName: undefined, termTitle: undefined, claudeSession: undefined, claudeState: undefined, usage: undefined };
           setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, title, claude, ...names } : t)));
         }
         const queued = waiting.current.get(tab.id);
@@ -435,6 +539,51 @@ export default function App() {
     if (typeof path === "string") void openFolder(path);
   }, [openFolder]);
 
+  /** Resumes the Claude conversations that were open in any window when Lookout quit. */
+  const restoreClaudeTabs = () => {
+    const keys: string[] = [];
+    const seen = new Set<string>();
+    const restore: { id: string; cwd: string | null; title: string | null }[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(CLAUDE_TABS_KEY)) keys.push(key);
+      }
+      for (const key of keys) {
+        const list = JSON.parse(localStorage.getItem(key) ?? "[]") as typeof restore;
+        for (const entry of list) {
+          if (typeof entry?.id !== "string" || !/^[0-9a-f-]+$/i.test(entry.id) || seen.has(entry.id)) continue;
+          seen.add(entry.id);
+          restore.push(entry);
+        }
+      }
+      for (const key of keys) localStorage.removeItem(key);
+    } catch {
+      return;
+    }
+    if (!latest.current.settings.restoreClaude) return;
+    for (const entry of restore) addTab(resumeTab(entry.id, entry.cwd, entry.title));
+  };
+
+  // The Claude conversations open here, for reopening them at the next launch.
+  useEffect(() => {
+    if (!started) return;
+    const open = tabs.flatMap((t) =>
+      t.kind === "terminal" && t.claude && t.claudeSession ? [{ id: t.claudeSession, cwd: t.claudeCwd ?? t.cwd, title: t.sessionName ?? null }] : [],
+    );
+    try {
+      localStorage.setItem(CLAUDE_TABS_KEY + appWindow.label, JSON.stringify(open));
+    } catch {
+      // Only for reopening; nothing else depends on it.
+    }
+  }, [tabs, started]);
+
+  // Done and waiting dots clear once the tab is in view.
+  useEffect(() => {
+    const seen = (t: Tab) => t.kind === "terminal" && (t.id === activeId || t.parent === activeId) && (t.claudeState === "done" || t.claudeState === "waiting");
+    setTabs((l) => (l.some(seen) ? l.map((t) => (seen(t) && t.kind === "terminal" ? { ...t, claudeState: undefined } : t)) : l));
+  }, [activeId]);
+
   // React runs effects twice in development; the folder must open once.
   const startup = useRef(false);
   useEffect(() => {
@@ -456,6 +605,8 @@ export default function App() {
       } else {
         newTerminal(false);
       }
+      // A fresh launch, not a window opened from another one: reopen the Claude conversations.
+      if (!start) restoreClaudeTabs();
       setStarted(true);
     })();
   }, []);
@@ -860,7 +1011,16 @@ export default function App() {
         },
       },
     ];
-    if (latest.current.tabs.length > 1) {
+    if (tab.kind === "terminal") {
+      const pane = paneOf(latest.current.tabs, tab.id);
+      items.push(
+        "separator",
+        pane
+          ? { label: "Close Right Half", icon: <X size={14} />, onSelect: () => closeTab(pane.id, true) }
+          : { label: "Split Terminal", icon: <Split size={14} />, shortcut: "⌘D", onSelect: () => void splitTerminal(tab.id) },
+      );
+    }
+    if (shownTabs(latest.current.tabs).length > 1) {
       items.push("separator", { label: "Move to New Window", icon: <AppWindow size={14} />, onSelect: () => void moveToNewWindow(tab.id) });
     }
     if (tab.kind === "file") {
@@ -879,7 +1039,8 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      const { tabs: list, activeId: current } = latest.current;
+      const { activeId: current } = latest.current;
+      const list = shownTabs(latest.current.tabs);
       const key = e.key.toLowerCase();
       const go = (delta: number) => {
         const i = list.findIndex((t) => t.id === current);
@@ -899,12 +1060,15 @@ export default function App() {
         f();
       };
       if (key === "t") return run(() => newTerminal(e.shiftKey));
+      if (key === "y") return run(() => setHistorySignal((n) => n + 1));
+      if (key === "p" && e.shiftKey) return run(() => setPalette(true));
+      if (key === "d" && !e.shiftKey) return run(() => current && void splitTerminal(current));
       if (key === "n" && !e.shiftKey) return run(newWindow);
       if (key === "w" && e.shiftKey) return run(() => void getCurrentWindow().close());
       if (key === "w") return run(() => current && closeTab(current));
       if (key === "o") return run(() => void chooseFolder());
       if (key === "b") return run(() => setPanel((p) => (p ? null : "files")));
-      if (key === "p" && latest.current.folder) return run(() => setQuickOpen(true));
+      if (key === "p" && !e.shiftKey && latest.current.folder) return run(() => setQuickOpen(true));
       if (e.shiftKey && key === "e") return run(() => setPanel((p) => (p === "files" ? null : "files")));
       if (e.shiftKey && key === "f") return run(() => (setPanel("search"), setSearchToken((t) => t + 1)));
       if (e.shiftKey && (e.key === "[" || e.key === "{")) return run(() => go(-1));
@@ -922,11 +1086,20 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newTerminal, closeTab, chooseFolder, newWindow]);
+  }, [newTerminal, closeTab, chooseFolder, newWindow, splitTerminal]);
 
   // Unsaved files are offered for saving before the window closes.
   useEffect(() => {
-    const un = getCurrentWindow().onCloseRequested((event) => {
+    const un = getCurrentWindow().onCloseRequested(async (event) => {
+      // Closing one of several windows forgets its Claude tabs; the last window keeps them for the next launch.
+      const others = (await getAllWebviewWindows()).filter((w) => w.label !== appWindow.label && (w.label === "main" || w.label.startsWith("w-")));
+      if (others.length > 0) {
+        try {
+          localStorage.removeItem(CLAUDE_TABS_KEY + appWindow.label);
+        } catch {
+          // Then they reopen at the next launch, which is harmless.
+        }
+      }
       const dirty = latest.current.tabs.filter((t) => t.kind === "file" && t.dirty);
       if (dirty.length === 0) return;
       event.preventDefault();
@@ -973,7 +1146,139 @@ export default function App() {
     window.addEventListener("mouseup", up);
   };
 
+  /** Drags the line between the halves of a split tab. */
+  const startSplitResize = (e: ReactMouseEvent, id: string) => {
+    e.preventDefault();
+    const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    const move = (ev: MouseEvent) => setSplitRatio((r) => ({ ...r, [id]: Math.max(0.2, Math.min(0.8, (ev.clientX - box.left) / box.width)) }));
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      document.body.classList.remove("col-resizing");
+    };
+    document.body.classList.add("col-resizing");
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  /** Shows a tab; for the right half of a split, the tab it is in. */
+  const showTab = useCallback((tabId: string) => {
+    const tab = latest.current.tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+    setActiveId(tab.kind === "terminal" && tab.parent ? tab.parent : tab.id);
+  }, []);
+
+  /** Conversations open in a tab here, by Claude session id. */
+  const openSessions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of tabs) if (t.kind === "terminal" && t.claudeSession) map.set(t.claudeSession, t.id);
+    return map;
+  }, [tabs]);
+
+  /** This window's terminal sessions, for the ports list. */
+  const terminalSessions = useMemo(() => {
+    const map = new Map<string, { tabId: string; title: string }>();
+    for (const t of tabs) if (t.kind === "terminal" && t.sessionId) map.set(t.sessionId, { tabId: t.id, title: t.title });
+    return map;
+  }, [tabs]);
+
   // ---- Render ----
+
+  /** The dot on a tab: what Claude is doing in it, or in its right half. */
+  const tabStatus = (tab: Tab): ClaudeState | undefined => {
+    if (tab.kind !== "terminal") return undefined;
+    const pane = paneOf(tabs, tab.id);
+    const states = [tab.claudeState, pane?.kind === "terminal" ? pane.claudeState : undefined];
+    return states.includes("waiting") ? "waiting" : states.includes("done") ? "done" : states.includes("working") ? "working" : undefined;
+  };
+
+  /** A terminal tab's tooltip: the Claude conversation's usage so far. */
+  const tabTip = (tab: Tab): string | undefined => {
+    if (tab.kind !== "terminal" || !tab.claude) return undefined;
+    const state = tab.claudeState === "working" ? "Claude is working" : tab.claudeState === "waiting" ? "Claude needs your input" : tab.claudeState === "done" ? "Claude finished" : null;
+    const usage = tab.usage ? `${formatTokens(tab.usage.tokens)} tokens${tab.usage.cost !== null ? `, ${formatCost(tab.usage.cost)}` : ""}` : null;
+    return [tab.title, state, usage].filter(Boolean).join(" · ");
+  };
+
+  /** What ⇧⌘P offers. */
+  const paletteCommands = (): PaletteCommand[] => {
+    const current = active;
+    const commands: PaletteCommand[] = [
+      { id: "new-terminal", label: "New Terminal", icon: <SquareTerminal size={14} />, shortcut: "⌘T", run: () => newTerminal(false) },
+      { id: "new-claude", label: "New Claude Session", icon: <Claude size={14} />, shortcut: "⇧⌘T", run: () => newTerminal(true) },
+      { id: "history", label: "Claude History", icon: <History size={14} />, shortcut: "⌘Y", run: () => setHistorySignal((n) => n + 1) },
+      {
+        id: "resume",
+        label: "Continue Conversation…",
+        icon: <Claude size={14} />,
+        keywords: "resume claude history",
+        run: async () =>
+          (await api.claudeSessions().catch(() => [])).map((session) => ({
+            id: session.id,
+            label: session.title ?? session.prompt ?? session.id,
+            icon: <Claude size={14} />,
+            keywords: `${basename(session.cwd)} ${session.prompt ?? ""}`,
+            run: () => (openSessions.has(session.id) ? showTab(openSessions.get(session.id)!) : addTab(resumeTab(session.id, session.cwd, session.title))),
+          })),
+      },
+    ];
+    if (current?.kind === "terminal") {
+      commands.push(
+        { id: "split", label: "Split Terminal", icon: <Split size={14} />, shortcut: "⌘D", run: () => void splitTerminal(current.parent ?? current.id) },
+        { id: "clear", label: "Clear Terminal", icon: <SquareTerminal size={14} />, shortcut: "⌘K", run: () => terminals.get(current.id)?.clear() },
+      );
+    }
+    commands.push(
+      { id: "open-folder", label: "Open Folder…", icon: <FolderOpen size={14} />, shortcut: "⌘O", run: () => void chooseFolder() },
+      {
+        id: "open-recent",
+        label: "Open Recent Folder…",
+        icon: <FolderOpen size={14} />,
+        run: () => recent.map((path) => ({ id: path, label: basename(path), keywords: path, icon: <FolderOpen size={14} />, run: () => void openFolder(path) })),
+      },
+    );
+    if (folder) commands.push({ id: "quick-open", label: "Go to File…", icon: <FileText size={14} />, shortcut: "⌘P", run: () => setQuickOpen(true) });
+    if (git) {
+      const root = git.root;
+      commands.push({
+        id: "branch",
+        label: "Switch Branch…",
+        icon: <GitBranch size={14} />,
+        keywords: "git checkout",
+        run: async () => {
+          const branches = await api.gitBranches(root).catch(() => null);
+          if (!branches) return [];
+          const locals = new Set(branches.local);
+          const remote = branches.remote.map((r) => r.slice(r.indexOf("/") + 1)).filter((b) => !locals.has(b));
+          return [...branches.local, ...remote].map((b) => ({
+            id: b,
+            label: b === branches.current ? `${b} (current)` : b,
+            icon: <GitBranch size={14} />,
+            run: () => void gitAction("Switching", () => api.gitSwitch(root, b, false), `On ${b}`),
+          }));
+        },
+      });
+    }
+    commands.push(
+      { id: "files", label: "Show Files", icon: <FileText size={14} />, shortcut: "⇧⌘E", run: () => setPanel("files") },
+      { id: "search", label: "Search in Files", icon: <FileText size={14} />, shortcut: "⇧⌘F", run: () => (setPanel("search"), setSearchToken((t) => t + 1)) },
+      { id: "git", label: "Source Control", icon: <GitBranch size={14} />, shortcut: "⌃⇧G", run: () => setPanel("git") },
+      { id: "sidebar", label: "Toggle Sidebar", icon: <FileText size={14} />, shortcut: "⌘B", run: () => setPanel((p) => (p ? null : "files")) },
+      {
+        id: "theme",
+        label: theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode",
+        icon: theme === "dark" ? <Sun size={14} /> : <Moon size={14} />,
+        keywords: "theme dark light appearance",
+        run: () => {
+          setThemeSwitched(true);
+          setTheme((t) => (t === "dark" ? "light" : "dark"));
+        },
+      },
+      { id: "new-window", label: "New Window", icon: <AppWindow size={14} />, shortcut: "⌘N", run: newWindow },
+    );
+    if (current) commands.push({ id: "close", label: "Close Tab", icon: <X size={14} />, shortcut: "⌘W", run: () => closeTab(current.id) });
+    return commands;
+  };
 
   const tabLabel = (tab: Tab) => {
     if (tab.kind === "terminal") return { icon: tab.claude ? <Claude size={13} className="claude-icon" /> : <SquareTerminal size={13} />, text: tab.title };
@@ -1208,6 +1513,12 @@ export default function App() {
           checked: settings.banners,
           onSelect: () => changeSetting("banners", !settings.banners),
         },
+        {
+          label: "Reopen Claude tabs at launch",
+          icon: <History size={14} />,
+          checked: settings.restoreClaude,
+          onSelect: () => changeSetting("restoreClaude", !settings.restoreClaude),
+        },
         "separator",
         {
           label: "Memes",
@@ -1270,10 +1581,12 @@ export default function App() {
           )}
         </div>
         <TabBar
-          tabs={tabs}
+          tabs={shownTabs(tabs)}
           activeId={activeId}
           label={tabLabel}
-          canTearOff={tabs.length > 1}
+          status={tabStatus}
+          tip={tabTip}
+          canTearOff={shownTabs(tabs).length > 1}
           onActivate={setActiveId}
           onClose={(id) => closeTab(id)}
           onPin={(id) => setTabs((l) => l.map((t) => (t.id === id && t.kind === "file" ? { ...t, preview: false } : t)))}
@@ -1309,7 +1622,21 @@ export default function App() {
               <Moon size={12.5} strokeWidth={1.9} />
             </span>
           </button>
-          <NotificationBell notices={notices} onOpen={(n) => void api.noticeOpen(n.id)} />
+          <div className="titlebar-icons">
+            <PortsButton sessions={terminalSessions} onShowTab={showTab} />
+            <HistoryButton
+              folder={folder}
+              openSessions={openSessions}
+              openSignal={historySignal}
+              onResume={(session) => addTab(resumeTab(session.id, session.cwd, session.title))}
+              onActivate={showTab}
+              onRenamed={(sessionId, name) =>
+                setTabs((l) => l.map((t) => (t.kind === "terminal" && t.claudeSession === sessionId ? { ...t, sessionName: name, title: t.claude ? name : t.title } : t)))
+              }
+              onError={(message) => toast("error", message)}
+            />
+            <NotificationBell notices={notices} onOpen={(n) => void api.noticeOpen(n.id)} />
+          </div>
         </div>
       </header>
 
@@ -1352,9 +1679,9 @@ export default function App() {
       </nav>
 
       <aside className="side-panel">
-        {panel && folder && (
-          <>
-            {panel === "files" && (
+        {sidePanel && folder && (
+          <div key={sidePanel} className="side-panel-body">
+            {sidePanel === "files" && (
               <FilesPanel
                 root={folder}
                 onClose={() => setPanel(null)}
@@ -1367,10 +1694,10 @@ export default function App() {
                 onError={(m) => toast("error", m)}
               />
             )}
-            {panel === "search" && (
+            {sidePanel === "search" && (
               <SearchPanel root={folder} onClose={() => setPanel(null)} focusToken={searchToken} onOpen={(path, line, from, to) => openFile(path, false, { line, from, to })} />
             )}
-            {panel === "git" && (
+            {sidePanel === "git" && (
               <GitPanel
                 status={git}
                 onClose={() => setPanel(null)}
@@ -1386,9 +1713,9 @@ export default function App() {
                 onBranchMenu={(e) => void branchMenu(e)}
               />
             )}
-          </>
+          </div>
         )}
-        {panel && !folder && (
+        {sidePanel && !folder && (
           <div className="panel-open-folder">
             <p>Open a folder to see its files, search it and use git.</p>
             <button type="button" className="button small" onClick={() => void chooseFolder()}>
@@ -1401,8 +1728,15 @@ export default function App() {
 
       <main className="content">
         {memes && <MemeButton />}
+        {active && paneOf(tabs, active.id) && (
+          <div className="split-divider" style={{ left: `${(splitRatio[active.id] ?? 0.5) * 100}%` }} onMouseDown={(e) => startSplitResize(e, active.id)} />
+        )}
         {tabs.map((tab) => {
           if (tab.kind === "terminal") {
+            // A split tab shows its terminal on the left and the pane's on the right.
+            const parent = tab.parent ? tabs.find((t) => t.id === tab.parent) : undefined;
+            const pane = parent ? undefined : paneOf(tabs, tab.id);
+            const ratio = splitRatio[parent?.id ?? tab.id] ?? 0.5;
             return (
               <TerminalView
                 key={tab.id}
@@ -1411,7 +1745,9 @@ export default function App() {
                 run={tab.run}
                 sessionId={tab.snapshot !== undefined ? tab.sessionId : null}
                 snapshot={tab.snapshot}
-                active={tab.id === activeId}
+                active={(parent?.id ?? tab.id) === activeId}
+                split={parent ? "right" : pane ? "left" : undefined}
+                style={parent ? { left: `${ratio * 100}%` } : pane ? { right: `${(1 - ratio) * 100}%` } : undefined}
                 theme={theme}
                 terminalTheme={terminalTheme}
                 fontSize={fontSize}
@@ -1517,6 +1853,7 @@ export default function App() {
           }}
         />
       )}
+      {palette && <CommandPalette commands={paletteCommands()} onClose={() => setPalette(false)} />}
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
       {dialog?.type === "choice" && (
         <ChoiceDialog title={dialog.title} message={dialog.message} actions={dialog.actions} onCancel={() => setDialog(null)} />

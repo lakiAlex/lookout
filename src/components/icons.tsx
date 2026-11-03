@@ -30,6 +30,11 @@ import {
   GitBranchIcon,
   GitCompareIcon,
   GitGraphIcon,
+  HistoryIcon,
+  LayoutTwoColumnIcon,
+  LinkSquare02Icon,
+  ServerStack02Icon,
+  CommandIcon,
   KeyboardIcon,
   Loading03Icon,
   Login01Icon,
@@ -101,6 +106,11 @@ export const FolderPlus = icon(FolderAddIcon);
 export const GitBranch = icon(GitBranchIcon);
 export const GitCompare = icon(GitCompareIcon);
 export const GitGraph = icon(GitGraphIcon);
+export const History = icon(HistoryIcon);
+export const Split = icon(LayoutTwoColumnIcon);
+export const ExternalLink = icon(LinkSquare02Icon);
+export const Server = icon(ServerStack02Icon);
+export const Command = icon(CommandIcon);
 export const ListCollapse = icon(ArrowShrink02Icon);
 export const Keyboard = icon(KeyboardIcon);
 export const LoaderCircle = icon(Loading03Icon);

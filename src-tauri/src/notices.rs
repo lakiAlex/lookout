@@ -130,7 +130,7 @@ impl Notices {
 /// The last `tail` bytes of a Claude Code transcript (a JSON line per
 /// message), or all of it when `tail` is None. Only .jsonl files under
 /// ~/.claude are read.
-fn read_transcript(path: &str, tail: Option<u64>) -> Option<String> {
+pub(crate) fn read_transcript(path: &str, tail: Option<u64>) -> Option<String> {
     let home = dirs::home_dir()?;
     let path = Path::new(path).canonicalize().ok()?;
     if !path.starts_with(home.join(".claude")) || path.extension().is_none_or(|e| e != "jsonl") {

@@ -29,6 +29,26 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -w \"$LOOKOUT_TTY\" ] && printf '\\033]7701;claude;%s\\007' \"$(base64 | tr -d '\\n')\" > \"$LOOKOUT_TTY\"; exit 0"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -w \"$LOOKOUT_TTY\" ] && printf '\\033]7701;claude;%s\\007' \"$(base64 | tr -d '\\n')\" > \"$LOOKOUT_TTY\"; exit 0"
+          }
+        ]
+      }
     ]
   }
 }

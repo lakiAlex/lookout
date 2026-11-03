@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import type { Tab } from "../lib/tabs";
+import type { ClaudeState, Tab } from "../lib/tabs";
 import { AppWindow, X } from "./icons";
 
 /** A tab dragged this far below the tab bar, or out of the window, opens in a new window. */
@@ -19,6 +19,10 @@ interface TabBarProps {
   tabs: Tab[];
   activeId: string | null;
   label: (tab: Tab) => { icon: ReactNode; text: string };
+  /** What Claude is doing in a terminal tab, for the dot on tabs not in view. */
+  status: (tab: Tab) => ClaudeState | undefined;
+  /** The tooltip of a terminal tab. */
+  tip: (tab: Tab) => string | undefined;
   /** A tab can leave only when another one stays. */
   canTearOff: boolean;
   onActivate: (id: string) => void;
@@ -136,6 +140,7 @@ export function TabBar(props: TabBarProps) {
         const { icon, text } = props.label(tab);
         const dirty = tab.kind === "file" && tab.dirty;
         const lifted = drag?.id === tab.id;
+        const status = tab.id === props.activeId ? undefined : props.status(tab);
         return (
           <div
             key={tab.id}
@@ -144,7 +149,7 @@ export function TabBar(props: TabBarProps) {
               else elements.current.delete(tab.id);
             }}
             className={`tab${tab.id === props.activeId ? " active" : ""}${tab.kind === "file" && tab.preview ? " preview" : ""}${lifted ? (drag.out ? " torn" : " lifted") : ""}`}
-            title={tab.kind === "file" ? tab.path : tab.kind === "diff" ? tab.path : undefined}
+            title={tab.kind === "file" ? tab.path : tab.kind === "diff" ? tab.path : props.tip(tab)}
             onPointerDown={(e) => startDrag(e, tab)}
             onDoubleClick={() => props.onPin(tab.id)}
             onContextMenu={(e) => {
@@ -152,7 +157,10 @@ export function TabBar(props: TabBarProps) {
               props.onMenu(e, tab);
             }}
           >
-            <span className="tab-icon">{icon}</span>
+            <span className="tab-icon">
+              {icon}
+              {status && <span key={status} className={`tab-status ${status}`} />}
+            </span>
             <span className="tab-text">{text}</span>
             <button
               type="button"

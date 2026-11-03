@@ -187,7 +187,43 @@ export const api = {
   noticeOpen: (id: number) => invoke<void>("notice_open", { id }),
   claudeReply: (transcript: string) => invoke<string | null>("claude_reply", { transcript }),
   claudeTitle: (transcript: string) => invoke<string | null>("claude_title", { transcript }),
+  claudeSessions: () => invoke<ClaudeSession[]>("claude_sessions"),
+  claudeSessionDelete: (id: string) => invoke<void>("claude_session_delete", { id }),
+  /** By session id, or by transcript path. */
+  claudeSessionDetails: (id: string) => invoke<SessionDetails | null>("claude_session_details", { id }),
+  claudeSessionRename: (id: string, name: string) => invoke<void>("claude_session_rename", { id, name }),
+  listeningPorts: () => invoke<ListeningPort[]>("listening_ports"),
 };
+
+/** A past Claude Code session, for the history panel. */
+export interface ClaudeSession {
+  id: string;
+  cwd: string;
+  title: string | null;
+  prompt: string | null;
+  branch: string | null;
+  /** Milliseconds since 1970. */
+  modified: number;
+}
+
+/** Read from a session's whole transcript, for its details and usage. */
+export interface SessionDetails {
+  /** Messages typed and Claude's replies, without tool calls. */
+  messages: number;
+  branch: string | null;
+  lastReply: string | null;
+  tokens: number;
+  /** In US dollars, as Claude Code counted it. */
+  cost: number | null;
+}
+
+/** A local server running in one of the terminals. */
+export interface ListeningPort {
+  port: number;
+  pid: number;
+  process: string;
+  sessionId: string;
+}
 
 export function basename(path: string): string {
   return path.replace(/\/+$/, "").split("/").pop() ?? path;

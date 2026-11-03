@@ -66,7 +66,7 @@ const ICONS: Record<NoticeKind, ReactNode> = {
   message: <Bell size={15} />,
 };
 
-function ago(time: number, now: number): string {
+export function ago(time: number, now: number): string {
   const s = Math.max(0, (now - time) / 1000);
   if (s < 45) return "now";
   if (s < 3600) return `${Math.round(s / 60)}m`;
@@ -75,7 +75,7 @@ function ago(time: number, now: number): string {
 }
 
 /** Re-renders every 30 seconds, for times like "4m". */
-function useNow(): number {
+export function useNow(): number {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);

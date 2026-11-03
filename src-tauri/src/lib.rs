@@ -1,8 +1,10 @@
 mod error;
 mod files;
 mod git;
+mod history;
 mod notices;
 mod picker;
+mod ports;
 mod pty;
 mod search;
 mod shell;
@@ -364,6 +366,32 @@ async fn claude_title(transcript: String) -> Option<String> {
     tauri::async_runtime::spawn_blocking(move || notices::claude_title(&transcript)).await.ok().flatten()
 }
 
+#[tauri::command]
+async fn claude_sessions() -> Vec<history::ClaudeSession> {
+    tauri::async_runtime::spawn_blocking(history::sessions).await.unwrap_or_default()
+}
+
+#[tauri::command]
+async fn claude_session_delete(id: String) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || history::delete(&id)).await.map_err(|e| AppError::other(e.to_string()))?
+}
+
+#[tauri::command]
+async fn claude_session_details(id: String) -> Option<history::SessionDetails> {
+    tauri::async_runtime::spawn_blocking(move || history::details(&id)).await.ok().flatten()
+}
+
+#[tauri::command]
+async fn claude_session_rename(id: String, name: String) -> AppResult<()> {
+    tauri::async_runtime::spawn_blocking(move || history::rename(&id, &name)).await.map_err(|e| AppError::other(e.to_string()))?
+}
+
+#[tauri::command]
+async fn listening_ports(state: State<'_, AppState>) -> Result<Vec<ports::ListeningPort>, ()> {
+    let shells = state.sessions.shell_pids();
+    Ok(tauri::async_runtime::spawn_blocking(move || ports::listening(&shells)).await.unwrap_or_default())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -462,6 +490,11 @@ pub fn run() {
             notice_open,
             claude_reply,
             claude_title,
+            claude_sessions,
+            claude_session_delete,
+            claude_session_details,
+            claude_session_rename,
+            listening_ports,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

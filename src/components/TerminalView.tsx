@@ -9,7 +9,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import { ChevronDown, ChevronUp, X } from "./icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "../api";
 import { fontCss, KEY_REPEAT, type Settings } from "../lib/settings";
 import { terminalColors } from "../lib/terminalThemes";
@@ -34,9 +34,10 @@ export interface TerminalHandle {
 
 export const terminals = new Map<string, TerminalHandle>();
 
-/** The JSON Claude Code passes to its Stop and Notification hooks. */
+/** The JSON Claude Code passes to its hooks (see shell/claude-settings.json). */
 export interface ClaudeHook {
   hook_event_name: string;
+  session_id?: string;
   transcript_path?: string;
   cwd?: string;
   message?: string;
@@ -77,6 +78,9 @@ interface TerminalViewProps {
   settings: Settings;
   onSession: (sessionId: string) => void;
   onEvent: (event: TerminalEvent) => void;
+  /** Which half of a split tab this terminal fills, with its edges in `style`. */
+  split?: "left" | "right";
+  style?: CSSProperties;
 }
 
 export function TerminalView(props: TerminalViewProps) {
@@ -304,13 +308,20 @@ export function TerminalView(props: TerminalViewProps) {
     };
     terminals.set(props.tabId, handle);
 
+    // Fit once the size settles: fitting on every frame of the side panel's
+    // animation redraws the screen and resizes the shell each time, which flashes.
+    let fitTimer = 0;
     const observer = new ResizeObserver(() => {
-      if (containerRef.current?.offsetParent) fit.fit();
+      window.clearTimeout(fitTimer);
+      fitTimer = window.setTimeout(() => {
+        if (containerRef.current?.offsetParent) fit.fit();
+      }, 90);
     });
     observer.observe(containerRef.current!);
 
     return () => {
       disposed = true;
+      window.clearTimeout(fitTimer);
       observer.disconnect();
       terminals.delete(props.tabId);
       const id = sessionRef.current;
@@ -365,7 +376,7 @@ export function TerminalView(props: TerminalViewProps) {
   };
 
   return (
-    <div className={`terminal-view${props.active ? "" : " hidden"}`}>
+    <div className={`terminal-view${props.active ? "" : " hidden"}${props.split ? ` split-${props.split}` : ""}`} style={props.style}>
       {finding && (
         <div className="term-find">
           <input

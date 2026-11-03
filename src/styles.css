@@ -103,10 +103,19 @@ input[type="checkbox"] {
   initial-value: 54px;
 }
 
+/* Registered so the side panel's width can animate when it opens and closes. */
+@property --side-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 .app {
   display: grid;
   --bar-w: 54px;
-  transition: --bar-w 0.24s cubic-bezier(0.2, 0, 0, 1);
+  transition:
+    --bar-w 0.24s cubic-bezier(0.2, 0, 0, 1),
+    --side-w 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
   grid-template-columns: var(--bar-w) var(--side-w) minmax(0, 1fr);
   grid-template-rows: 38px minmax(0, 1fr);
   height: 100vh;
@@ -180,6 +189,13 @@ input[type="checkbox"] {
   flex-shrink: 0;
 }
 
+/* History and the bell sit closer together than the other title bar items. */
+.titlebar-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* ---- Tabs ---- */
 
 .tabs {
@@ -235,6 +251,43 @@ input[type="checkbox"] {
   display: grid;
   place-items: center;
   flex-shrink: 0;
+}
+
+/* What Claude is doing in a tab that is not in view. */
+.tab-icon {
+  position: relative;
+}
+
+.tab-status {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--chrome);
+  animation: badge-pop 0.35s cubic-bezier(0.34, 1.7, 0.5, 1);
+}
+
+.tab-status.working {
+  background: var(--claude);
+  animation:
+    badge-pop 0.35s cubic-bezier(0.34, 1.7, 0.5, 1),
+    status-pulse 1.4s ease-in-out 0.35s infinite;
+}
+
+.tab-status.done {
+  background: var(--git-added);
+}
+
+.tab-status.waiting {
+  background: #f2557a;
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .tab-file-icon {
@@ -558,12 +611,59 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   z-index: 2;
 }
 
+/* Dragging the edge follows the pointer without easing. */
+body.col-resizing .app {
+  transition: --bar-w 0.24s cubic-bezier(0.2, 0, 0, 1);
+}
+
 .panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 180px;
 }
+
+/* A side panel opening, or switching to another one, comes in like the history and notifications panels. */
+.side-panel-body {
+  height: 100%;
+  transform-origin: 0 0;
+  animation: side-panel-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+@keyframes side-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-10px) scale(0.98);
+  }
+}
+
+/* Its first rows follow one after another. */
+.panel .tree-row,
+.panel .git-section,
+.panel .git-row,
+.panel .result-file,
+.panel .result-line {
+  animation: side-row-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+@keyframes side-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(2) { animation-delay: 25ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(3) { animation-delay: 50ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(4) { animation-delay: 75ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(5) { animation-delay: 100ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(6) { animation-delay: 125ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(7) { animation-delay: 150ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(8) { animation-delay: 175ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(9) { animation-delay: 200ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(10) { animation-delay: 225ms; }
+.panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line):nth-child(11) { animation-delay: 250ms; }
 
 .panel-header {
   display: flex;
@@ -749,9 +849,19 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   box-shadow: var(--group-ring);
 }
 
+/* Focused search fields: a faint edge and a soft glow instead of the full accent ring. */
+:root {
+  --search-focus-edge: color-mix(in srgb, var(--accent) 26%, transparent);
+  --search-focus-glow: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
 .search-input:focus-within,
-.search-filter:focus {
-  box-shadow: 0 0 0 2px var(--accent), 0 0 0 5px var(--ring);
+.search-filter:focus,
+.history-search input:focus {
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1px var(--search-focus-edge),
+    0 0 0 4px var(--search-focus-glow);
 }
 
 .search-input input {
@@ -1025,9 +1135,30 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   background: var(--chrome);
 }
 
+/* The two halves of a split tab, with a line to drag between them. */
+.terminal-view.split-right {
+  box-shadow: inset 1px 0 0 var(--border);
+}
+
+.split-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 7px;
+  margin-left: -3px;
+  cursor: col-resize;
+}
+
+.split-divider:hover {
+  background: linear-gradient(to right, transparent 3px, var(--focus) 3px, var(--focus) 4px, transparent 4px);
+}
+
 .terminal-host {
   flex: 1;
   min-height: 0;
+  /* Until the terminal refits after a resize, the part that no longer fits is cut off. */
+  overflow: hidden;
 }
 
 /* xterm draws its own scrollbar; the viewport's native one stays hidden. */
@@ -2174,6 +2305,253 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   color: var(--fg-3);
 }
 
+/* ---- Local servers ---- */
+
+.ports-button {
+  width: auto;
+  gap: 3px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ports-count {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  animation: count-tick 0.3s ease;
+}
+
+.port-card {
+  align-items: center;
+  padding-right: 10px;
+  --notice-color: var(--git-added);
+}
+
+.port-card .notice-title {
+  font-family: var(--code-font, var(--mono));
+  font-size: 12px;
+}
+
+.port-tab {
+  flex-shrink: 0;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--group-bg);
+  color: var(--fg-2);
+  font-size: 11.5px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.port-card:hover .port-tab {
+  opacity: 1;
+}
+
+.port-tab:hover {
+  background: var(--press);
+  color: var(--fg-strong);
+}
+
+/* ---- Command palette ---- */
+
+.command-crumb {
+  padding: 2px 6px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-3);
+}
+
+.command-row {
+  gap: 8px;
+}
+
+.command-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  color: var(--fg-3);
+}
+
+.quick-row.active .command-icon {
+  color: inherit;
+}
+
+.command-shortcut {
+  margin-left: auto;
+  padding-right: 8px;
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.quick-row.active .command-shortcut {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* ---- Claude history ---- */
+
+.history-panel {
+  width: 380px;
+}
+
+.history-scope {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+}
+
+.history-scope button {
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.history-scope button:hover:not(:disabled) {
+  color: var(--fg-strong);
+}
+
+.history-scope button.active {
+  background: var(--raised);
+  box-shadow: var(--raised-shadow);
+  color: var(--fg-strong);
+}
+
+.history-scope button:disabled {
+  opacity: 0.45;
+}
+
+.history-search {
+  padding: 0 10px 6px;
+}
+
+.history-search input {
+  width: 100%;
+  height: 30px;
+  font-size: 12.5px;
+}
+
+.history-group {
+  padding: 8px 6px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.history-group:first-child {
+  padding-top: 2px;
+}
+
+.notice-card.selected {
+  background: var(--hover);
+}
+
+.history-open-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--git-added);
+  vertical-align: 1px;
+}
+
+.history-rename {
+  height: 22px;
+  margin: -2px 0 1px;
+  padding: 0 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.history-foot {
+  padding: 6px 14px 9px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+/* Details of the hovered conversation, to the left of the panel. */
+.history-peek {
+  position: absolute;
+  right: calc(380px + 2px);
+  z-index: 71;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 280px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-subtle) 88%, transparent);
+  backdrop-filter: blur(28px) saturate(1.7);
+  box-shadow: var(--shadow-menu);
+  transform-origin: 100% 20px;
+  animation: panel-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+  pointer-events: none;
+}
+
+:root[data-theme="light"] .history-peek {
+  background: rgba(250, 250, 252, 0.92);
+}
+
+.history-peek-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+
+.history-peek-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--code-font, var(--mono));
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.history-peek-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11.5px;
+  color: var(--fg-2);
+}
+
+.history-peek-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.history-peek-reply {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fg);
+}
+
+.history-peek-muted {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
 /* Pop-up cards under the bell, for tabs that are not in view. */
 .notice-peeks {
   position: fixed;
@@ -2253,6 +2631,10 @@ body:has(.context-menu) .activity-button[data-tip]::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .side-panel-body,
+  .panel :is(.tree-row, .git-section, .git-row, .result-file, .result-line),
+  .history-peek,
+  .tab-status,
   .notice-row,
   .notice-row.leaving,
   .notice-panel,
