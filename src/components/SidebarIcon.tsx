@@ -1,14 +1,14 @@
 // Sidebar icons, from Hugeicons like the rest of the app. The open panel's icon is drawn bolder.
-import { Files02Icon, FolderOpenIcon, GitBranchIcon, CursorMagicSelection02Icon, Search01Icon, Settings02Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons";
+import { File02Icon, Folder03Icon, GitGraphIcon, CursorMagicSelection04Icon, Search01Icon, MoreHorizontalIcon, SidebarLeftIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 const ICONS = {
-  files: Files02Icon,
+  files: File02Icon,
   search: Search01Icon,
-  git: GitBranchIcon,
-  pick: CursorMagicSelection02Icon,
-  folder: FolderOpenIcon,
-  settings: Settings02Icon,
+  git: GitGraphIcon,
+  pick: CursorMagicSelection04Icon,
+  folder: Folder03Icon,
+  settings: MoreHorizontalIcon,
   sidebar: SidebarLeftIcon,
 };
 

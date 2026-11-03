@@ -127,25 +127,60 @@ impl Notices {
     }
 }
 
-/// The start of Claude's last reply in a Claude Code transcript (a JSON line
-/// per message), for the notification when Claude finishes. Only files under
+/// The last `tail` bytes of a Claude Code transcript (a JSON line per
+/// message), or all of it when `tail` is None. Only .jsonl files under
 /// ~/.claude are read.
-pub fn claude_reply(path: &str) -> Option<String> {
+fn read_transcript(path: &str, tail: Option<u64>) -> Option<String> {
     let home = dirs::home_dir()?;
     let path = Path::new(path).canonicalize().ok()?;
     if !path.starts_with(home.join(".claude")) || path.extension().is_none_or(|e| e != "jsonl") {
         return None;
     }
-    // The reply is near the end; long transcripts are only read from there.
     let mut file = std::fs::File::open(&path).ok()?;
     let length = file.metadata().ok()?.len();
-    let tail = 512 * 1024;
-    if length > tail {
+    if let Some(tail) = tail.filter(|&t| length > t) {
         file.seek(SeekFrom::Start(length - tail)).ok()?;
     }
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes).ok()?;
-    last_reply(&String::from_utf8_lossy(&bytes))
+    Some(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The start of Claude's last reply in a Claude Code transcript, for the
+/// notification when Claude finishes.
+pub fn claude_reply(path: &str) -> Option<String> {
+    // The reply is near the end; long transcripts are only read from there.
+    last_reply(&read_transcript(path, Some(512 * 1024))?)
+}
+
+/// The session's name in a Claude Code transcript, for its tab: the name
+/// given with /rename, or else the one Claude Code made up.
+pub fn claude_title(path: &str) -> Option<String> {
+    // Claude Code writes the name again as the session goes on, so it is
+    // usually near the end. A name only at the start needs the whole file.
+    session_title(&read_transcript(path, Some(512 * 1024))?).or_else(|| session_title(&read_transcript(path, None)?))
+}
+
+/// The last "custom-title" (from /rename) in a transcript, or else the last "ai-title".
+pub fn session_title(transcript: &str) -> Option<String> {
+    let mut custom = None;
+    let mut ai = None;
+    for line in transcript.lines() {
+        // Most lines are messages; only parse the ones that can be titles.
+        if !line.contains("-title\"") {
+            continue;
+        }
+        let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+        let (title, key) = match entry["type"].as_str() {
+            Some("custom-title") => (&mut custom, "customTitle"),
+            Some("ai-title") => (&mut ai, "aiTitle"),
+            _ => continue,
+        };
+        if let Some(text) = entry[key].as_str().map(str::trim).filter(|t| !t.is_empty()) {
+            *title = Some(text.to_string());
+        }
+    }
+    custom.or(ai)
 }
 
 /// The text of the last assistant message that is not from a subagent,
@@ -197,6 +232,20 @@ mod tests {
         let reply = last_reply(&long).unwrap();
         assert_eq!(reply.chars().count(), 180);
         assert!(reply.ends_with('…'));
+    }
+
+    #[test]
+    fn finds_the_session_title() {
+        let transcript = [
+            r#"{"type":"ai-title","aiTitle":"First guess","sessionId":"s"}"#,
+            r#"{"type":"user","message":{"role":"user","content":"the \"ai-title\" line"}}"#,
+            r#"{"type":"ai-title","aiTitle":"Fix the build","sessionId":"s"}"#,
+        ]
+        .join("\n");
+        assert_eq!(session_title(&transcript).as_deref(), Some("Fix the build"));
+        let renamed = format!("{transcript}\n{}", r#"{"type":"custom-title","customTitle":"Release 1.3","sessionId":"s"}"#);
+        assert_eq!(session_title(&renamed).as_deref(), Some("Release 1.3"));
+        assert_eq!(session_title(r#"{"type":"user","message":{"content":"hi"}}"#), None);
     }
 
     #[test]

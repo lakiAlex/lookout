@@ -186,6 +186,7 @@ export const api = {
   noticesClear: () => invoke<void>("notices_clear"),
   noticeOpen: (id: number) => invoke<void>("notice_open", { id }),
   claudeReply: (transcript: string) => invoke<string | null>("claude_reply", { transcript }),
+  claudeTitle: (transcript: string) => invoke<string | null>("claude_title", { transcript }),
 };
 
 export function basename(path: string): string {

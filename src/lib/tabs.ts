@@ -11,6 +11,10 @@ export type Tab =
       sessionId: string | null;
       title: string;
       claude: boolean;
+      /** The title the program in front set (OSC 0 or 2). Claude Code sets it to the topic. */
+      termTitle?: string;
+      /** The Claude session's name, from its transcript. */
+      sessionName?: string;
       /** The screen of a terminal moved from another window, drawn before its session attaches. */
       snapshot?: string;
     }

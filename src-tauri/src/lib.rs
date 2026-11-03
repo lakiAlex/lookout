@@ -359,6 +359,11 @@ async fn claude_reply(transcript: String) -> Option<String> {
     tauri::async_runtime::spawn_blocking(move || notices::claude_reply(&transcript)).await.ok().flatten()
 }
 
+#[tauri::command]
+async fn claude_title(transcript: String) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || notices::claude_title(&transcript)).await.ok().flatten()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -456,6 +461,7 @@ pub fn run() {
             notices_clear,
             notice_open,
             claude_reply,
+            claude_title,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

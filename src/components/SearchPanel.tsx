@@ -2,9 +2,11 @@ import { CaseSensitive, ChevronRight, Ellipsis, LoaderCircle, Regex, WholeWord, 
 import { useEffect, useRef, useState } from "react";
 import { api, basename, dirname, toAppError, type SearchOptions, type SearchResult } from "../api";
 import { iconUrl } from "../icons";
+import { PanelClose } from "./PanelClose";
 
 interface SearchPanelProps {
   root: string;
+  onClose: () => void;
   focusToken: number;
   onOpen: (path: string, line: number, from: number, to: number) => void;
 }
@@ -75,6 +77,7 @@ export function SearchPanel(props: SearchPanelProps) {
           <button type="button" className={`icon-button${showFilters ? " on" : ""}`} title="Files to include and exclude" onClick={() => setShowFilters((s) => !s)}>
             <Ellipsis size={15} />
           </button>
+          <PanelClose onClose={props.onClose} />
         </div>
       </div>
       <div className="search-form">

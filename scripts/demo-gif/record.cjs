@@ -180,7 +180,8 @@ const mock = () => {
       const write = (text) => window["_" + onData.id]({ index: index++, message: enc.encode(text).buffer });
       window.__write = write;
       window.__lines = term.split("\r\n");
-      setTimeout(() => write(window.__lines.slice(0, 8).join("\r\n") + "\r\n"), 300);
+      // Claude Code puts the session name in the terminal title; the tab shows it.
+      setTimeout(() => write("\x1b]0;\u2733 Leaf pic button\x07" + window.__lines.slice(0, 8).join("\r\n") + "\r\n"), 300);
       return "s1";
     },
     notice_post: () => null,
@@ -282,6 +283,7 @@ const picks = [
   await shot(1600);
   // 2. A second question with another pick.
   await page.evaluate((p) => window.__emit("picked", p), picks[1]);
+  await write("\x1b]0;\u2733 Monstera match score\x07");
   await write("\x1b[2m>\x1b[0m \x1b[2m[Pasted text #2 +12 lines]\x1b[0m ");
   await page.waitForTimeout(100);
   await shot(500);

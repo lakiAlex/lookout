@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { api, type NewNotice, type Notice, type NoticeKind } from "../api";
-import { Bell, BrushCleaning, CircleCheck, CircleX, MessageBell, Sparkle, X } from "./icons";
+import { Bell, BrushCleaning, CircleCheck, Claude, CircleX, MessageBell, X } from "./icons";
 import type { TerminalEvent } from "./TerminalView";
 
 /** Commands that run at least this long get a notification when they end. */
@@ -31,6 +31,7 @@ function duration(seconds: number): string {
 
 /** The notification for something that happened in a terminal, or null. */
 export async function noticeFor(event: TerminalEvent, tabTitle: string): Promise<Pick<NewNotice, "kind" | "title" | "body"> | null> {
+  if (event.type === "title") return null;
   if (event.type === "command") {
     if (event.seconds < LONG_COMMAND_SECONDS || event.exitCode === 130 || INTERACTIVE.has(program(event.line))) return null;
     const ok = event.exitCode === 0;
@@ -58,7 +59,7 @@ export async function noticeFor(event: TerminalEvent, tabTitle: string): Promise
 }
 
 const ICONS: Record<NoticeKind, ReactNode> = {
-  claude: <Sparkle size={15} />,
+  claude: <Claude size={15} />,
   "claude-input": <MessageBell size={15} />,
   done: <CircleCheck size={15} />,
   failed: <CircleX size={15} />,
@@ -183,9 +184,7 @@ export function NotificationBell(props: { notices: Notice[]; onOpen: (notice: No
       >
         <Bell size={16} />
         {unread > 0 && (
-          <span key={unread} className="bell-badge">
-            {unread > 9 ? "9+" : unread}
-          </span>
+          <span key={unread} className="bell-badge" />
         )}
       </button>
       {open && (

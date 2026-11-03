@@ -27,7 +27,7 @@ import {
   Plus,
   Rows3,
   ScrollText,
-  Sparkle,
+  Claude,
   SquareTerminal,
   Sun,
   TextCursor,
@@ -70,6 +70,7 @@ import {
 import { newTabId, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
 import { savedTerminalTheme, TERMINAL_THEME_KEY, TERMINAL_THEMES, terminalColors } from "./lib/terminalThemes";
 import { iconUrl } from "./icons";
+import appIcon from "../src-tauri/icons/128x128@2x.png";
 
 const THEME_KEY = "lookout.theme";
 const SIDE_KEY = "lookout.sideWidth";
@@ -105,6 +106,14 @@ function markFor(file: GitFile): GitMark {
   if (letter === "A") return { letter: "A", kind: "added" };
   if (letter === "R") return { letter: "R", kind: "renamed" };
   return { letter: "M", kind: "modified" };
+}
+
+/** A Claude tab's title: the session's name, or else the topic Claude Code
+ * puts in the terminal title without its status glyph, or "claude" before either. */
+function claudeTitle(tab: { termTitle?: string; sessionName?: string }): string {
+  if (tab.sessionName) return tab.sessionName;
+  const topic = (tab.termTitle ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+  return topic && topic !== "Claude Code" ? topic : "claude";
 }
 
 export default function App() {
@@ -355,6 +364,22 @@ export default function App() {
   const terminalEvent = async (tabId: string, event: TerminalEvent) => {
     const tab = latest.current.tabs.find((t) => t.id === tabId);
     if (tab?.kind !== "terminal") return;
+    if (event.type === "title") {
+      const termTitle = event.title;
+      setTabs((l) =>
+        l.map((t) => (t.id === tabId && t.kind === "terminal" ? { ...t, termTitle, title: t.claude ? claudeTitle({ ...t, termTitle }) : t.title } : t)),
+      );
+      return;
+    }
+    // Claude's hooks name the session's transcript, which has the session's name.
+    if (event.type === "claude" && event.hook.transcript_path) {
+      void api.claudeTitle(event.hook.transcript_path).then((sessionName) => {
+        if (!sessionName) return;
+        setTabs((l) =>
+          l.map((t) => (t.id === tabId && t.kind === "terminal" ? { ...t, sessionName, title: t.claude ? sessionName : t.title } : t)),
+        );
+      });
+    }
     // Claude's own messages repeat what its hooks report.
     if (event.type === "message" && tab.claude) return;
     const tabTitle = event.type === "claude" && event.hook.cwd ? basename(event.hook.cwd) : tab.title;
@@ -373,9 +398,11 @@ export default function App() {
         const program = info.process ?? "";
         const claude = program === "claude";
         const shell = ["zsh", "bash", "fish", "sh", "-zsh", "login"].includes(program);
-        const title = claude ? "claude" : shell ? (info.cwd ? basename(info.cwd) : program) : program;
+        const title = claude ? claudeTitle(tab) : shell ? (info.cwd ? basename(info.cwd) : program) : program;
         if (title && (title !== tab.title || claude !== tab.claude)) {
-          setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, title, claude } : t)));
+          // A Claude that quit takes its session name and topic with it.
+          const names = claude ? {} : { sessionName: undefined, termTitle: undefined };
+          setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, title, claude, ...names } : t)));
         }
         const queued = waiting.current.get(tab.id);
         if (claude && queued) {
@@ -949,7 +976,7 @@ export default function App() {
   // ---- Render ----
 
   const tabLabel = (tab: Tab) => {
-    if (tab.kind === "terminal") return { icon: tab.claude ? <Sparkle size={13} className="claude-icon" /> : <SquareTerminal size={13} />, text: tab.title };
+    if (tab.kind === "terminal") return { icon: tab.claude ? <Claude size={13} className="claude-icon" /> : <SquareTerminal size={13} />, text: tab.title };
     if (tab.kind === "file") return { icon: <img className="tab-file-icon" src={iconUrl(basename(tab.path), false)} alt="" />, text: basename(tab.path) };
     return { icon: <GitCompare size={13} />, text: `${basename(tab.path)}${tab.staged ? " (staged)" : ""}` };
   };
@@ -1258,7 +1285,7 @@ export default function App() {
             <Plus size={15} />
           </button>
           <button type="button" className="tab-new claude" title="New Claude Session (⇧⌘T)" onClick={() => newTerminal(true)}>
-            <Sparkle size={14} />
+            <Claude size={17} />
           </button>
         </TabBar>
         <div className="titlebar-actions">
@@ -1307,9 +1334,6 @@ export default function App() {
           <button type="button" className="activity-button" data-tip="Open a project" aria-label="Open a project" onClick={projectMenu}>
             <SidebarIcon name="folder" />
           </button>
-          <button type="button" className="activity-button" data-tip="Settings" aria-label="Settings" onClick={settingsMenu}>
-            <SidebarIcon name="settings" />
-          </button>
           <button
             type="button"
             className="activity-button"
@@ -1321,6 +1345,9 @@ export default function App() {
           >
             <SidebarIcon name="sidebar" />
           </button>
+          <button type="button" className="activity-button" data-tip="Settings" aria-label="Settings" onClick={settingsMenu}>
+            <SidebarIcon name="settings" />
+          </button>
         </div>
       </nav>
 
@@ -1330,6 +1357,7 @@ export default function App() {
             {panel === "files" && (
               <FilesPanel
                 root={folder}
+                onClose={() => setPanel(null)}
                 marks={marks}
                 activePath={active?.kind === "file" ? active.path : null}
                 onOpen={(path, pin) => openFile(path, pin)}
@@ -1340,11 +1368,12 @@ export default function App() {
               />
             )}
             {panel === "search" && (
-              <SearchPanel root={folder} focusToken={searchToken} onOpen={(path, line, from, to) => openFile(path, false, { line, from, to })} />
+              <SearchPanel root={folder} onClose={() => setPanel(null)} focusToken={searchToken} onOpen={(path, line, from, to) => openFile(path, false, { line, from, to })} />
             )}
             {panel === "git" && (
               <GitPanel
                 status={git}
+                onClose={() => setPanel(null)}
                 busy={gitBusy}
                 onRefresh={() => void refreshGit()}
                 onCommit={commit}
@@ -1447,7 +1476,7 @@ export default function App() {
         {tabs.length === 0 && started && (
           <div className="welcome">
             <div className="welcome-card">
-              <SquareTerminal size={36} strokeWidth={1.4} />
+              <img className="welcome-icon" src={appIcon} alt="" />
               <h3>Lookout</h3>
               <p className="muted">Open a project folder to get files, search and git next to your terminals.</p>
               <div className="welcome-actions">
@@ -1458,7 +1487,7 @@ export default function App() {
                   <SquareTerminal size={14} /> New Terminal <span className="kbd">⌘T</span>
                 </button>
                 <button type="button" className="button" onClick={() => newTerminal(true)}>
-                  <Sparkle size={14} /> New Claude Session <span className="kbd">⇧⌘T</span>
+                  <Claude size={14} /> New Claude Session <span className="kbd">⇧⌘T</span>
                 </button>
               </div>
               {recent.length > 0 && (

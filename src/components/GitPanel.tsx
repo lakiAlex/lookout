@@ -2,9 +2,11 @@ import { ArrowDown, ArrowUp, Check, ChevronRight, FileText, GitBranch, LoaderCir
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 import { basename, dirname, type GitFile, type GitStatus } from "../api";
 import { iconUrl } from "../icons";
+import { PanelClose } from "./PanelClose";
 
 interface GitPanelProps {
   status: GitStatus | null | undefined;
+  onClose: () => void;
   busy: string | null;
   onRefresh: () => void;
   onCommit: (message: string, amend: boolean) => Promise<boolean>;
@@ -37,6 +39,9 @@ export function GitPanel(props: GitPanelProps) {
       <div className="panel">
         <div className="panel-header">
           <span className="panel-title">Source Control</span>
+          <div className="panel-actions">
+            <PanelClose onClose={props.onClose} />
+          </div>
         </div>
         <div className="panel-empty">
           <LoaderCircle size={14} className="spin" />
@@ -49,6 +54,9 @@ export function GitPanel(props: GitPanelProps) {
       <div className="panel">
         <div className="panel-header">
           <span className="panel-title">Source Control</span>
+          <div className="panel-actions">
+            <PanelClose onClose={props.onClose} />
+          </div>
         </div>
         <div className="panel-empty">This folder is not in a git repository.</div>
       </div>
@@ -153,6 +161,7 @@ export function GitPanel(props: GitPanelProps) {
           <button type="button" className="icon-button" title="Refresh" onClick={props.onRefresh}>
             <RefreshCw size={14} />
           </button>
+          <PanelClose onClose={props.onClose} />
         </div>
       </div>
       <div className="git-bar">

@@ -14,6 +14,7 @@ import {
   CancelCircleIcon,
   CaseSensitiveIcon,
   CatIcon,
+  ClaudeIcon,
   CheckmarkCircle02Icon,
   CleanIcon,
   ClipboardIcon,
@@ -28,6 +29,7 @@ import {
   FolderOpenIcon,
   GitBranchIcon,
   GitCompareIcon,
+  GitGraphIcon,
   KeyboardIcon,
   Loading03Icon,
   Login01Icon,
@@ -79,6 +81,7 @@ export const BrushCleaning = icon(CleanIcon);
 export const CaseSensitive = icon(CaseSensitiveIcon);
 export const Cat = icon(CatIcon);
 export const Check = icon(Tick02Icon);
+export const Claude = icon(ClaudeIcon);
 export const CircleCheck = icon(CheckmarkCircle02Icon);
 export const CircleX = icon(CancelCircleIcon);
 export const LogIn = icon(Login01Icon);
@@ -97,6 +100,7 @@ export const FolderOpen = icon(FolderOpenIcon);
 export const FolderPlus = icon(FolderAddIcon);
 export const GitBranch = icon(GitBranchIcon);
 export const GitCompare = icon(GitCompareIcon);
+export const GitGraph = icon(GitGraphIcon);
 export const ListCollapse = icon(ArrowShrink02Icon);
 export const Keyboard = icon(KeyboardIcon);
 export const LoaderCircle = icon(Loading03Icon);

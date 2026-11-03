@@ -4,6 +4,7 @@ import { ChevronRight, FilePlus2, FolderPlus, ListCollapse, RefreshCw } from "./
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { api, basename, dirname, relative, toAppError, type Entry } from "../api";
 import { iconUrl } from "../icons";
+import { PanelClose } from "./PanelClose";
 
 export interface GitMark {
   letter: string;
@@ -14,6 +15,7 @@ type Editing = { kind: "file" | "folder"; dir: string } | { kind: "rename"; entr
 
 interface FilesPanelProps {
   root: string;
+  onClose: () => void;
   /** Git marks by path relative to the root. */
   marks: Map<string, GitMark>;
   activePath: string | null;
@@ -369,6 +371,7 @@ export function FilesPanel(props: FilesPanelProps) {
           <button type="button" className="icon-button" title="Collapse Folders" onClick={() => setExpanded(new Set([root]))}>
             <ListCollapse size={15} />
           </button>
+          <PanelClose onClose={props.onClose} />
         </div>
       </div>
       <div

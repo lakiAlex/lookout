@@ -323,6 +323,10 @@ input[type="checkbox"] {
   color: var(--fg-strong);
 }
 
+.tab-new.claude {
+  color: var(--claude);
+}
+
 .tab-new.claude:hover {
   color: var(--claude);
 }
@@ -739,9 +743,9 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding-right: 3px;
-  border-radius: 7px;
-  background: var(--group-bg);
+  padding-right: 4px;
+  border-radius: 8px;
+  background: transparent;
   box-shadow: var(--group-ring);
 }
 
@@ -751,7 +755,8 @@ body:has(.context-menu) .activity-button[data-tip]::after {
 }
 
 .search-input input {
-  height: 28px;
+  height: 32px;
+  font-size: 13px;
   border: none;
   background: transparent;
   box-shadow: none !important;
@@ -1154,6 +1159,13 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   color: var(--fg-3);
 }
 
+/* The app icon. macOS rounds the icon itself, so the PNG is square. */
+.welcome-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 13px;
+}
+
 .welcome-card h3 {
   margin: 8px 0 0;
   font-size: 16px;
@@ -1181,6 +1193,12 @@ body:has(.context-menu) .activity-button[data-tip]::after {
   font-size: 11.5px;
   color: inherit;
   opacity: 0.6;
+}
+
+/* On the light primary button, the dark key background hid the shortcut. */
+.button.primary .kbd {
+  background: transparent;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
 }
 
 .welcome-recent {
@@ -1845,20 +1863,13 @@ body:has(.context-menu) .activity-button[data-tip]::after {
 
 .bell-badge {
   position: absolute;
-  top: 1px;
-  right: 1px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 7px;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: #f2557a;
   box-shadow: 0 0 0 2px var(--chrome);
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 14px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
   animation: badge-pop 0.4s cubic-bezier(0.34, 1.7, 0.5, 1);
 }
 
@@ -2031,7 +2042,14 @@ body:has(.context-menu) .activity-button[data-tip]::after {
 
 .notice-card.claude,
 .notice-card.claude-input {
-  --notice-color: var(--claude);
+  --notice-color: #f2557a;
+}
+
+.notice-card.claude .notice-icon,
+.notice-card.claude-input .notice-icon {
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+  color: var(--claude);
 }
 
 .notice-card.done {

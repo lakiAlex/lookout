@@ -5,7 +5,7 @@
 
 Lookout is an extremely snappy, lightweight, open-source terminal for macOS built for Claude Code. Use Claude in the terminal with a VS Code-style file explorer, search, git and editor, and pick any element on your screen, in any app, to send straight to Claude.
 
-![Lookout in use: an element picked in Chrome is pasted into Claude Code, Claude answers and edits code, then the Files and Source Control panels, the notification bell with cards, the git changes chip, and the settings menu](docs/demo.gif)
+![Lookout in use: an element picked in Chrome is pasted into Claude Code, Claude answers and edits code while the tab shows the session name, then the Files and Source Control panels, the notification bell with cards, the git changes chip, and the settings menu](docs/demo.gif)
 
 It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sessions, files, search, git and the macOS Accessibility calls behind the picker, and a React frontend with [xterm.js](https://xtermjs.org) for the terminal and [CodeMirror](https://codemirror.net) for the editor. The app is about 18 MB, 7.5 MB as a download.
 

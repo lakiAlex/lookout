@@ -48,7 +48,8 @@ export interface ClaudeHook {
 export type TerminalEvent =
   | { type: "command"; line: string; exitCode: number; seconds: number }
   | { type: "claude"; hook: ClaudeHook }
-  | { type: "message"; title: string; body: string };
+  | { type: "message"; title: string; body: string }
+  | { type: "title"; title: string };
 
 function decodeHook(base64: string): ClaudeHook | null {
   try {
@@ -207,6 +208,8 @@ export function TerminalView(props: TerminalViewProps) {
       }
       return true;
     });
+    // The window title a program sets, OSC 0 or 2.
+    term.onTitleChange((title) => latest.current.onEvent({ type: "title", title }));
     // Notifications programs send to the terminal: OSC 9 as in iTerm2, and
     // OSC 777 "notify;title;body" as in rxvt and Ghostty.
     term.parser.registerOscHandler(9, (data) => {
