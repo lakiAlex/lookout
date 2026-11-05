@@ -15,7 +15,7 @@ import {
   lineNumbers,
   rectangularSelection,
 } from "@codemirror/view";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, basename } from "../api";
 import { editorTheme, highlight, languageFor } from "../lib/editor";
 
@@ -44,6 +44,10 @@ interface EditorViewProps {
   onDirty: (dirty: boolean) => void;
   onSaved: () => void;
   onError: (message: string) => void;
+  /** Takes the keyboard when shown. In a split window, only the tab in use does. */
+  primary?: boolean;
+  /** Its place, in a split window. */
+  style?: CSSProperties;
 }
 
 export function EditorView(props: EditorViewProps) {
@@ -189,16 +193,17 @@ export function EditorView(props: EditorViewProps) {
     if (props.reveal && view.current?.state.doc.length) goTo(props.reveal.line, props.reveal.from, props.reveal.to);
   }, [props.reveal]);
 
+  const primary = props.primary ?? true;
   useEffect(() => {
-    if (props.active) requestAnimationFrame(() => view.current?.focus());
-  }, [props.active]);
+    if (props.active && primary) requestAnimationFrame(() => view.current?.focus());
+  }, [props.active, primary]);
 
   useEffect(() => {
     view.current?.dispatch({ effects: wrap.current.reconfigure(props.wordWrap ? CodeMirror.lineWrapping : []) });
   }, [props.wordWrap]);
 
   return (
-    <div className={`editor-view${props.active ? "" : " hidden"}`}>
+    <div className={`editor-view${props.active ? "" : " hidden"}`} style={props.style} data-tab={props.tabId}>
       {problem && <div className="editor-problem">{problem}</div>}
       <div ref={host} className="editor-host" style={problem ? { display: "none" } : undefined} />
     </div>

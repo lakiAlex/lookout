@@ -10,6 +10,7 @@ import {
   AppWindow,
   AtSign,
   Bell,
+  Check,
   ClipboardCopy,
   Code,
   Copy,
@@ -30,6 +31,8 @@ import {
   Rows3,
   ScrollText,
   Split,
+  SplitDown,
+  MoveOut,
   Claude,
   SquareTerminal,
   Sun,
@@ -40,7 +43,7 @@ import {
   Trash2,
   X,
 } from "./components/icons";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { api, basename, dirname, relative, tildify, toAppError, type AppError, type Entry, type GitFile, type GitStatus, type Notice, type Pick } from "./api";
 import { SidebarIcon, type SidebarIconName } from "./components/SidebarIcon";
 import { MemeButton } from "./components/Meme";
@@ -59,7 +62,7 @@ import { PortsButton } from "./components/Ports";
 import { noticeFor, NoticePeeks, NotificationBell } from "./components/Notifications";
 import { QuickOpen } from "./components/QuickOpen";
 import { SearchPanel } from "./components/SearchPanel";
-import { TabBar } from "./components/TabBar";
+import { TabBar, type DragMode } from "./components/TabBar";
 import { terminals, TerminalView, type TerminalEvent } from "./components/TerminalView";
 import { EDITOR_THEME_KEY, EDITOR_THEMES, editorColors, savedEditorTheme } from "./lib/editorThemes";
 import {
@@ -75,7 +78,8 @@ import {
   uiFontCss,
   type Settings,
 } from "./lib/settings";
-import { newTabId, type ClaudeState, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
+import { newGroupId, newTabId, type ClaudeState, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
+import { dividers, halfOf, insertPane, MAX_PANES, paneRects, panesOf, paneTowards, removePane, resizeSplit, sideAt, type Divider, type Layout, type Rect, type Side } from "./lib/layout";
 import { savedTerminalTheme, TERMINAL_THEME_KEY, TERMINAL_THEMES, terminalColors } from "./lib/terminalThemes";
 import { iconUrl } from "./icons";
 import appIcon from "../src-tauri/icons/128x128@2x.png";
@@ -109,15 +113,45 @@ interface Toast {
 
 const newId = newTabId;
 
-/** The tabs with their own place in the tab bar: all but the right halves of splits. */
-function shownTabs(list: Tab[]): Tab[] {
-  return list.filter((t) => !(t.kind === "terminal" && t.parent && list.some((p) => p.id === t.parent)));
+/** The tabs of the group `g`, in order. */
+function tabsIn(list: Tab[], g: string): Tab[] {
+  return list.filter((t) => t.group === g);
 }
 
-/** The right half of a split terminal tab, if it has one. */
-function paneOf(list: Tab[], id: string): Tab | undefined {
-  return list.find((t) => t.kind === "terminal" && t.parent === id);
+/** The tab in view in the group `g`: the tab in use when it is there, else
+ * the one shown there last, else its first. */
+function shownIn(list: Tab[], g: string, shown: Record<string, string>, activeId: string | null): Tab | undefined {
+  const own = tabsIn(list, g);
+  return own.find((t) => t.id === activeId) ?? own.find((t) => t.id === shown[g]) ?? own[0];
 }
+
+/** A place in the content as CSS edges, `top` pixels lower for a group with its tabs at its top. */
+function rectStyle(r: Rect, top = 0) {
+  return {
+    left: `${r.x * 100}%`,
+    top: top ? `calc(${r.y * 100}% + ${top}px)` : `${r.y * 100}%`,
+    right: `${(1 - r.x - r.w) * 100}%`,
+    bottom: `${(1 - r.y - r.h) * 100}%`,
+  };
+}
+
+/** Where a tab dragged out of its bar goes: a new window, in among another
+ * group's tabs, into a group, or a new group on one side of a group. */
+type DropTarget =
+  | { kind: "out" }
+  | { kind: "strip"; group: string; index: number }
+  | { kind: "move"; group: string; rect: Rect }
+  | { kind: "split"; group: string; side: Side; rect: Rect }
+  | { kind: "full"; group: string; rect: Rect };
+
+/** The height of the tabs at the top of a group below the title bar. */
+const GROUP_TABS = 34;
+
+/** A group starts at the top of the window, so its tabs are in the title bar. */
+const atTop = (r: Rect) => r.y < 1e-6;
+
+/** A pane is not made narrower or lower than this by dragging a line. */
+const MIN_PANE = { row: 160, column: 90 };
 
 /** A tab that runs `claude --resume` for a past conversation. */
 function resumeTab(id: string, cwd: string | null, title: string | null): Tab {
@@ -211,12 +245,82 @@ export default function App() {
   /** Bumped by ⌘Y to open the history panel. */
   const [historySignal, setHistorySignal] = useState(0);
   const [palette, setPalette] = useState(false);
-  /** The left half's share of the width of a split tab, by the tab's id. */
-  const [splitRatio, setSplitRatio] = useState<Record<string, number>>({});
+  /** How the window is split into groups, each with its own tabs, by group id. */
+  const [layout, setLayout] = useState<Layout>(() => ({ pane: newGroupId() }));
+  /** The tab shown last in each group, by group id. The group in use shows activeId. */
+  const [groupShown, setGroupShown] = useState<Record<string, string>>({});
+  /** Where the tab being dragged goes when let go. */
+  const [drop, setDrop] = useState<DropTarget | null>(null);
+  /** The same, set as the pointer moves, before the next render. */
+  const dropRef = useRef<DropTarget | null>(null);
+  const panesRef = useRef<HTMLDivElement>(null);
+  const titleTabsRef = useRef<HTMLDivElement>(null);
+  /** Each group's tab bar, by group id, to drop tabs on. */
+  const bars = useRef(new Map<string, HTMLDivElement>());
+  /** "Copied" or "Pasted" over the meme button for a moment, after a copy or paste in a terminal. */
+  const [clipNote, setClipNote] = useState<{ text: string; key: number; leaving: boolean } | null>(null);
+  const clipTimer = useRef(0);
+  const noteClipboard = useCallback((kind: "copied" | "pasted") => {
+    const text = kind === "copied" ? "Copied" : "Pasted";
+    window.clearTimeout(clipTimer.current);
+    // The same note again stays up; it fades out a moment after the last one.
+    setClipNote((note) => (note && note.text === text && !note.leaving ? note : { text, key: Date.now(), leaving: false }));
+    clipTimer.current = window.setTimeout(() => {
+      setClipNote((note) => note && { ...note, leaving: true });
+      clipTimer.current = window.setTimeout(() => setClipNote(null), 250);
+    }, 1200);
+  }, []);
 
-  const latest = useRef({ tabs, activeId, folder, git, panel, settings });
-  latest.current = { tabs, activeId, folder, git, panel, settings };
+  const latest = useRef({ tabs, activeId, folder, git, panel, settings, layout, groupShown });
+  latest.current = { tabs, activeId, folder, git, panel, settings, layout, groupShown };
   const active = tabs.find((t) => t.id === activeId) ?? null;
+  const groups = panesOf(layout);
+  const rects = paneRects(layout);
+  /** The tab in view in each group. */
+  const visible = groups.flatMap((g) => shownIn(tabs, g, groupShown, activeId) ?? []);
+  const visibleKey = visible.map((t) => t.id).join(" ");
+
+  // The group in use remembers its tab, for when another group has the keyboard.
+  useEffect(() => {
+    const tab = tabs.find((t) => t.id === activeId);
+    if (tab?.group && groupShown[tab.group] !== tab.id) setGroupShown((m) => ({ ...m, [tab.group!]: tab.id }));
+  }, [activeId, tabs, groupShown]);
+
+  // The title bar's tabs sit above their groups: it gets where the content starts and how wide it is.
+  useLayoutEffect(() => {
+    const bar = titleTabsRef.current;
+    const content = panesRef.current;
+    if (!bar || !content) return;
+    const update = () => {
+      const b = bar.getBoundingClientRect();
+      const c = content.getBoundingClientRect();
+      bar.style.setProperty("--cl", `${c.left - b.left}px`);
+      bar.style.setProperty("--cw", `${c.width}px`);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  // Every tab is in a group of the layout, and a group whose last tab left closes.
+  useLayoutEffect(() => {
+    const ids = panesOf(layout);
+    if (tabs.some((t) => !t.group || !ids.includes(t.group))) {
+      const home = tabs.find((t) => t.id === activeId)?.group;
+      const g = home && ids.includes(home) ? home : ids[0];
+      setTabs((l) => l.map((t) => (!t.group || !ids.includes(t.group) ? { ...t, group: g } : t)));
+      return;
+    }
+    const empty = ids.filter((g) => !tabs.some((t) => t.group === g));
+    if (!empty.length || ids.length < 2) return;
+    setLayout((l) => {
+      let next = l;
+      for (const g of empty) if (panesOf(next).length > 1) next = removePane(next, g) ?? next;
+      return next;
+    });
+  }, [tabs, layout, activeId]);
 
   const toast = useCallback((kind: Toast["kind"], message: string) => {
     const id = Date.now() + Math.random();
@@ -271,30 +375,67 @@ export default function App() {
 
   // ---- Tabs ----
 
-  const addTab = useCallback((tab: Tab) => {
-    setTabs((list) => {
-      const at = list.findIndex((t) => t.id === latest.current.activeId);
-      const next = [...list];
-      next.splice(at < 0 ? next.length : at + 1, 0, tab);
-      return next;
-    });
-    setActiveId(tab.id);
+  /** The group new tabs go to: the one with the tab in use. */
+  const currentGroup = useCallback(() => {
+    const { tabs: list, activeId: current, layout: lay } = latest.current;
+    const g = list.find((t) => t.id === current)?.group;
+    return g && panesOf(lay).includes(g) ? g : panesOf(lay)[0];
   }, []);
 
-  const newTerminal = useCallback(
-    (claude: boolean, cwd?: string) => {
-      addTab({
-        kind: "terminal",
-        id: newId(),
-        cwd: cwd ?? latest.current.folder,
-        run: claude ? "claude" : null,
-        sessionId: null,
-        title: claude ? "claude" : "zsh",
-        claude,
+  /** Opens a tab in the group `into`, or the group in use, after the tab shown there. */
+  const addTab = useCallback(
+    (tab: Tab, into?: string) => {
+      const g = into ?? currentGroup();
+      const placed: Tab = { ...tab, group: g };
+      setTabs((list) => {
+        const shown = shownIn(list, g, latest.current.groupShown, latest.current.activeId);
+        const at = shown ? list.indexOf(shown) + 1 : list.map((t) => t.group).lastIndexOf(g) + 1 || list.length;
+        const next = [...list];
+        next.splice(at, 0, placed);
+        return next;
       });
+      setActiveId(placed.id);
+    },
+    [currentGroup],
+  );
+
+  const newTerminal = useCallback(
+    (claude: boolean, cwd?: string, into?: string) => {
+      addTab(
+        {
+          kind: "terminal",
+          id: newId(),
+          cwd: cwd ?? latest.current.folder,
+          run: claude ? "claude" : null,
+          sessionId: null,
+          title: claude ? "claude" : "zsh",
+          claude,
+        },
+        into,
+      );
     },
     [addTab],
   );
+
+  /** Takes a tab out. Its group shows the tab beside it; a group whose last tab
+   * this was closes, and the group before it gets the keyboard. */
+  const removeTab = useCallback((id: string) => {
+    const { tabs: list, activeId: current, layout: lay, groupShown: shown } = latest.current;
+    const tab = list.find((t) => t.id === id);
+    if (!tab) return;
+    const g = tab.group ?? "";
+    const own = tabsIn(list, g);
+    const index = own.findIndex((t) => t.id === id);
+    const rest = own.filter((t) => t.id !== id);
+    const next = rest[Math.min(index, rest.length - 1)];
+    setTabs((l) => l.filter((t) => t.id !== id));
+    if (next && shownIn(list, g, shown, current)?.id === id) setGroupShown((m) => ({ ...m, [g]: next.id }));
+    if (current !== id) return;
+    if (next) return setActiveId(next.id);
+    const order = panesOf(lay);
+    const other = order[order.indexOf(g) - 1] ?? order[order.indexOf(g) + 1];
+    setActiveId(other ? (shownIn(list, other, shown, null)?.id ?? null) : null);
+  }, []);
 
   const closeTab = useCallback((id: string, force = false) => {
     const tab = latest.current.tabs.find((t) => t.id === id);
@@ -318,31 +459,79 @@ export default function App() {
       });
       return;
     }
-    setTabs((list) => {
-      const index = shownTabs(list).findIndex((t) => t.id === id);
-      // A split tab's right half closes with it.
-      const next = list.filter((t) => t.id !== id && !(t.kind === "terminal" && t.parent === id));
-      const shown = shownTabs(next);
-      if (latest.current.activeId === id) setActiveId(shown[Math.min(index, shown.length - 1)]?.id ?? null);
-      return next;
-    });
+    removeTab(id);
   }, []);
 
-  /** Opens a second terminal on the right half of a terminal tab, in the same folder. */
-  const splitTerminal = useCallback(async (id: string) => {
-    const tab = latest.current.tabs.find((t) => t.id === id);
-    if (tab?.kind !== "terminal" || tab.parent) return;
-    const existing = paneOf(latest.current.tabs, id);
-    if (existing) return terminals.get(existing.id)?.focus();
-    const info = tab.sessionId ? await api.ptyInfo(tab.sessionId).catch(() => null) : null;
-    const pane: Tab = { kind: "terminal", id: newId(), cwd: info?.cwd ?? tab.cwd ?? latest.current.folder, run: null, sessionId: null, title: "zsh", claude: false, parent: id };
+  /** The tab in view in each group. */
+  const visibleTabs = useCallback(() => {
+    const { tabs: list, layout: lay, groupShown: shown, activeId: current } = latest.current;
+    return panesOf(lay).flatMap((g) => shownIn(list, g, shown, current) ?? []);
+  }, []);
+
+  /** Shows a tab in its group, which gets the keyboard. */
+  const showTab = useCallback((tabId: string) => {
+    if (latest.current.tabs.some((t) => t.id === tabId)) setActiveId(tabId);
+  }, []);
+
+  /** Opens a terminal in a new group on the `side` of the group `from` (or the
+   * group in use), in the folder of the terminal shown there. */
+  const splitTerminal = useCallback(
+    async (side: Side = "right", from?: string) => {
+      const { tabs: list, activeId: current, layout: lay, groupShown: shown } = latest.current;
+      if (panesOf(lay).length >= MAX_PANES) return toast("info", `A window splits into ${MAX_PANES} at most`);
+      const g = from ?? currentGroup();
+      const here = shownIn(list, g, shown, current);
+      const info = here?.kind === "terminal" && here.sessionId ? await api.ptyInfo(here.sessionId).catch(() => null) : null;
+      const cwd = info?.cwd ?? (here?.kind === "terminal" ? here.cwd : null) ?? latest.current.folder;
+      const group = newGroupId();
+      setLayout((l) => insertPane(l, g, side, { pane: group }));
+      addTab({ kind: "terminal", id: newId(), cwd, run: null, sessionId: null, title: "zsh", claude: false }, group);
+    },
+    [toast, currentGroup, addTab],
+  );
+
+  /** Moves a tab into the group `g`: before its tab at `index` among the
+   * others, or else after the tab shown there. The group it leaves shows the
+   * tab beside it. */
+  const moveToGroup = useCallback((id: string, g: string, index?: number) => {
+    const { tabs: list } = latest.current;
+    const tab = list.find((t) => t.id === id);
+    if (!tab) return;
+    const from = tab.group ?? "";
+    if (from !== g) {
+      const own = tabsIn(list, from);
+      const i = own.findIndex((t) => t.id === id);
+      const rest = own.filter((t) => t.id !== id);
+      const next = rest[Math.min(i, rest.length - 1)];
+      if (next) setGroupShown((m) => ({ ...m, [from]: next.id }));
+    }
     setTabs((l) => {
-      const next = [...l];
-      next.splice(l.findIndex((t) => t.id === id) + 1, 0, pane);
-      return next;
+      const moving = l.find((t) => t.id === id);
+      if (!moving) return l;
+      const rest = l.filter((t) => t.id !== id);
+      const own = rest.filter((t) => t.group === g);
+      let at: number;
+      if (index !== undefined) at = index < own.length ? rest.indexOf(own[index]) : own.length ? rest.indexOf(own[own.length - 1]) + 1 : rest.length;
+      else {
+        const after = shownIn(rest, g, latest.current.groupShown, null);
+        at = after ? rest.indexOf(after) + 1 : rest.length;
+      }
+      rest.splice(at, 0, { ...moving, group: g });
+      return rest;
     });
     setActiveId(id);
   }, []);
+
+  /** Moves a tab into a new group on the `side` of the group `target`. */
+  const splitWith = useCallback(
+    (id: string, target: string, side: Side) => {
+      if (panesOf(latest.current.layout).length >= MAX_PANES) return;
+      const group = newGroupId();
+      setLayout((l) => insertPane(l, target, side, { pane: group }));
+      moveToGroup(id, group);
+    },
+    [moveToGroup],
+  );
 
   const openFile = useCallback(
     (path: string, pin: boolean, reveal: Reveal | null = null) => {
@@ -355,16 +544,17 @@ export default function App() {
         return;
       }
       const tab: Tab = { kind: "file", id: newId(), path, dirty: false, preview: !pin, reveal };
-      // A single click replaces the previous preview tab, as in VS Code.
-      const preview = list.find((t) => t.kind === "file" && t.preview && !t.dirty);
+      // A single click replaces the group's preview tab, as in VS Code.
+      const g = currentGroup();
+      const preview = list.find((t) => t.kind === "file" && t.preview && !t.dirty && t.group === g);
       if (!pin && preview) {
-        setTabs((l) => l.map((t) => (t.id === preview.id ? tab : t)));
+        setTabs((l) => l.map((t) => (t.id === preview.id ? { ...tab, group: preview.group } : t)));
         setActiveId(tab.id);
         return;
       }
       addTab(tab);
     },
-    [addTab],
+    [addTab, currentGroup],
   );
 
   const openDiff = useCallback(
@@ -411,10 +601,10 @@ export default function App() {
   useEffect(() => {
     const un = appWindow.listen<string>("pty-exit", (event) => {
       const tab = latest.current.tabs.find((t) => t.kind === "terminal" && t.sessionId === event.payload);
-      if (tab) closeTab(tab.id, true);
+      if (tab) removeTab(tab.id);
     });
     return () => void un.then((f) => f());
-  }, [closeTab]);
+  }, [removeTab]);
 
   // ---- Notifications ----
 
@@ -425,7 +615,7 @@ export default function App() {
     // A notification was clicked in some window; the window with the tab shows it.
     const unOpen = appWindow.listen<string>("activate-tab", (event) => {
       if (!latest.current.tabs.some((t) => t.id === event.payload)) return;
-      setActiveId(event.payload);
+      showTab(event.payload);
       void appWindow.unminimize().then(() => appWindow.setFocus());
     });
     return () => {
@@ -433,7 +623,7 @@ export default function App() {
       void unPeek.then((f) => f());
       void unOpen.then((f) => f());
     };
-  }, []);
+  }, [showTab]);
 
   const terminalEvent = async (tabId: string, event: TerminalEvent) => {
     const tab = latest.current.tabs.find((t) => t.id === tabId);
@@ -454,8 +644,7 @@ export default function App() {
       else if (name === "Stop" && !hook.stop_hook_active) state = "done";
       else if (name === "Notification" && hook.notification_type !== "idle_prompt" && !/waiting for your input/i.test(hook.message ?? "")) state = "waiting";
       else if (name === "SessionStart") state = undefined;
-      const { activeId: current } = latest.current;
-      const inView = tabId === current || tab.parent === current;
+      const inView = visibleTabs().some((t) => t.id === tabId);
       setTabs((l) =>
         l.map((t) =>
           t.id === tabId && t.kind === "terminal"
@@ -580,11 +769,12 @@ export default function App() {
     }
   }, [tabs, started]);
 
-  // Done and waiting dots clear once the tab is in view.
+  // Done and waiting dots clear once the tab is in view in its group.
   useEffect(() => {
-    const seen = (t: Tab) => t.kind === "terminal" && (t.id === activeId || t.parent === activeId) && (t.claudeState === "done" || t.claudeState === "waiting");
+    const ids = new Set(visibleKey.split(" "));
+    const seen = (t: Tab) => t.kind === "terminal" && ids.has(t.id) && (t.claudeState === "done" || t.claudeState === "waiting");
     setTabs((l) => (l.some(seen) ? l.map((t) => (seen(t) && t.kind === "terminal" ? { ...t, claudeState: undefined } : t)) : l));
-  }, [activeId]);
+  }, [visibleKey]);
 
   // React runs effects twice in development; the folder must open once.
   const startup = useRef(false);
@@ -796,12 +986,14 @@ export default function App() {
 
   // ---- Claude helpers ----
 
-  /** The terminal to send to: the active one, or the most recent Claude terminal. */
+  /** The terminal to send to: the one in use, or one in view in another group, or a Claude terminal. */
   const targetTerminal = () => {
-    const { tabs: list, activeId: current } = latest.current;
-    const activeTab = list.find((t) => t.id === current);
-    if (activeTab?.kind === "terminal") return activeTab;
-    return list.find((t) => t.kind === "terminal" && t.claude) ?? list.find((t) => t.kind === "terminal") ?? null;
+    const list = latest.current.tabs;
+    const here = list.find((t) => t.id === latest.current.activeId);
+    if (here?.kind === "terminal") return here;
+    return (
+      visibleTabs().find((t) => t.kind === "terminal") ?? list.find((t) => t.kind === "terminal" && t.claude) ?? list.find((t) => t.kind === "terminal") ?? null
+    );
   };
 
   /** Pastes a pick into a Claude terminal: the screenshot path first (Claude
@@ -814,15 +1006,18 @@ export default function App() {
     setTimeout(() => terminal.paste(pick.report), at);
     // Typed, not pasted, so Claude puts it after the [Pasted text] marker and the cursor is ready for typing.
     setTimeout(() => terminal.send(" "), at + 150);
-    setActiveId(tabId);
+    showTab(tabId);
     setTimeout(() => terminal.focus(), at + 200);
   };
 
   const sendPick = (pick: Pick) => {
     const { tabs: list, activeId: current } = latest.current;
-    const activeTab = list.find((t) => t.id === current);
+    const here = list.find((t) => t.id === current);
+    // The tab in use when it runs Claude, or else a Claude tab in view in another group, or any Claude tab.
     const claudeTab =
-      activeTab?.kind === "terminal" && activeTab.claude ? activeTab : list.find((t) => t.kind === "terminal" && t.claude);
+      (here?.kind === "terminal" && here.claude ? here : undefined) ??
+      visibleTabs().find((t) => t.kind === "terminal" && t.claude) ??
+      list.find((t) => t.kind === "terminal" && t.claude);
     if (claudeTab) return pasteSequence(claudeTab.id, pick);
     // No Claude session yet: start one and paste once Claude is running.
     const id = newId();
@@ -835,7 +1030,7 @@ export default function App() {
     const root = latest.current.folder;
     if (!tab) return toast("error", "Open a terminal first");
     terminals.get(tab.id)?.paste(paths.map((path) => `@${root ? relative(root, path) : path} `).join(""));
-    setActiveId(tab.id);
+    showTab(tab.id);
     terminals.get(tab.id)?.focus();
   };
 
@@ -886,11 +1081,12 @@ export default function App() {
       const drop = event.payload;
       if (drop.type !== "drop" || !drop.paths.length) return;
       const el = document.elementFromPoint(drop.position.x / window.devicePixelRatio, drop.position.y / window.devicePixelRatio);
-      const tab = latest.current.tabs.find((t) => t.id === latest.current.activeId);
-      if (!el?.closest(".terminal-view") || tab?.kind !== "terminal") return;
+      // The pane under the drop, in a split tab.
+      const id = el?.closest<HTMLElement>(".terminal-view")?.dataset.tab;
+      if (!id) return;
       const quoted = drop.paths.map((p) => (/^[\w@%+=:,./-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`));
-      terminals.get(tab.id)?.paste(quoted.join(" ") + " ");
-      terminals.get(tab.id)?.focus();
+      terminals.get(id)?.paste(quoted.join(" ") + " ");
+      terminals.get(id)?.focus();
     });
     return () => void un.then((f) => f());
   }, []);
@@ -927,10 +1123,10 @@ export default function App() {
       if (tab.kind === "terminal") {
         if (!terminal || !tab.sessionId) return;
         session = tab.sessionId;
-        moving = { ...tab, snapshot: await terminal.moveOut() };
+        moving = { ...tab, group: undefined, snapshot: await terminal.moveOut() };
       } else if (tab.kind === "file") {
         const editor = editors.get(tab.id);
-        moving = { ...tab, preview: false, text: tab.dirty ? editor?.text() : undefined };
+        moving = { ...tab, group: undefined, preview: false, text: tab.dirty ? editor?.text() : undefined };
       }
       const start: WindowStart = { folder: current, tab: moving };
       await api.windowNew({ start, session, x: at?.x ?? null, y: at?.y ?? null });
@@ -940,22 +1136,8 @@ export default function App() {
       return;
     }
     // The tab lives on in the new window: no save prompt, and the terminal's shell keeps running.
-    setTabs((l) => {
-      const index = l.findIndex((t) => t.id === id);
-      const next = l.filter((t) => t.id !== id);
-      if (latest.current.activeId === id) setActiveId(next[Math.min(index, next.length - 1)]?.id ?? null);
-      return next;
-    });
+    removeTab(id);
   };
-
-  const moveTab = (id: string, index: number) =>
-    setTabs((l) => {
-      const tab = l.find((t) => t.id === id);
-      if (!tab) return l;
-      const rest = l.filter((t) => t.id !== id);
-      rest.splice(index, 0, tab);
-      return rest;
-    });
 
   // ---- Menus ----
 
@@ -1009,20 +1191,22 @@ export default function App() {
       {
         label: "Close Others",
         onSelect: () => {
-          for (const t of latest.current.tabs) if (t.id !== tab.id) closeTab(t.id);
+          setActiveId(tab.id);
+          for (const t of tabsIn(latest.current.tabs, tab.group ?? "")) if (t.id !== tab.id) closeTab(t.id);
         },
       },
     ];
-    if (tab.kind === "terminal") {
-      const pane = paneOf(latest.current.tabs, tab.id);
-      items.push(
-        "separator",
-        pane
-          ? { label: "Close Right Half", icon: <X size={14} />, onSelect: () => closeTab(pane.id, true) }
-          : { label: "Split Terminal", icon: <Split size={14} />, shortcut: "⌘D", onSelect: () => void splitTerminal(tab.id) },
-      );
-    }
-    if (shownTabs(latest.current.tabs).length > 1) {
+    const g = tab.group ?? currentGroup();
+    const full = panesOf(latest.current.layout).length >= MAX_PANES;
+    const alone = tabsIn(latest.current.tabs, g).length < 2;
+    items.push(
+      "separator",
+      { label: "Split Terminal", icon: <Split size={14} />, shortcut: "⌘D", disabled: full, onSelect: () => void splitTerminal("right", g) },
+      { label: "Split Terminal Down", icon: <SplitDown size={14} />, shortcut: "⇧⌘D", disabled: full, onSelect: () => void splitTerminal("bottom", g) },
+      { label: "Move to New Group on the Right", icon: <MoveOut size={14} />, disabled: full || alone, onSelect: () => splitWith(tab.id, g, "right") },
+      { label: "Move to New Group Below", icon: <MoveOut size={14} />, disabled: full || alone, onSelect: () => splitWith(tab.id, g, "bottom") },
+    );
+    if (latest.current.tabs.length > 1) {
       items.push("separator", { label: "Move to New Window", icon: <AppWindow size={14} />, onSelect: () => void moveToNewWindow(tab.id) });
     }
     if (tab.kind === "file") {
@@ -1042,7 +1226,8 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       const { activeId: current } = latest.current;
-      const list = shownTabs(latest.current.tabs);
+      // Moving between tabs stays in the group in use.
+      const list = tabsIn(latest.current.tabs, currentGroup());
       const key = e.key.toLowerCase();
       const go = (delta: number) => {
         const i = list.findIndex((t) => t.id === current);
@@ -1064,7 +1249,15 @@ export default function App() {
       if (key === "t") return run(() => newTerminal(e.shiftKey));
       if (key === "y") return run(() => setHistorySignal((n) => n + 1));
       if (key === "p" && e.shiftKey) return run(() => setPalette(true));
-      if (key === "d" && !e.shiftKey) return run(() => current && void splitTerminal(current));
+      if (key === "d") return run(() => void splitTerminal(e.shiftKey ? "bottom" : "right"));
+      // ⌥⌘ and an arrow goes to the group on that side.
+      const arrow = ({ arrowleft: "left", arrowright: "right", arrowup: "top", arrowdown: "bottom" } as const)[key as "arrowleft"];
+      if (e.altKey && arrow) {
+        const { tabs: all, layout: lay, groupShown: shown } = latest.current;
+        const next = paneTowards(lay, currentGroup(), arrow);
+        const tab = next ? shownIn(all, next, shown, null) : undefined;
+        return run(() => tab && setActiveId(tab.id));
+      }
       if (key === "n" && !e.shiftKey) return run(newWindow);
       if (key === "w" && e.shiftKey) return run(() => void getCurrentWindow().close());
       if (key === "w") return run(() => current && closeTab(current));
@@ -1079,7 +1272,7 @@ export default function App() {
       if (key === "=" || key === "+") return run(() => setFontSize((s) => Math.min(24, s + 1)));
       if (key === "-") return run(() => setFontSize((s) => Math.max(9, s - 1)));
       if (key === "0") return run(() => setFontSize(13));
-      const tab = list.find((t) => t.id === current);
+      const tab = latest.current.tabs.find((t) => t.id === current);
       if (tab?.kind === "terminal") {
         if (key === "k") return run(() => terminals.get(tab.id)?.clear());
         if (key === "f") return run(() => terminals.get(tab.id)?.find());
@@ -1088,7 +1281,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [newTerminal, closeTab, chooseFolder, newWindow, splitTerminal]);
+  }, [newTerminal, closeTab, currentGroup, chooseFolder, newWindow, splitTerminal]);
 
   // Unsaved files are offered for saving before the window closes.
   useEffect(() => {
@@ -1148,27 +1341,116 @@ export default function App() {
     window.addEventListener("mouseup", up);
   };
 
-  /** Drags the line between the halves of a split tab. */
-  const startSplitResize = (e: ReactMouseEvent, id: string) => {
+  /** Drags a line between groups. */
+  const startSplitResize = (e: ReactMouseEvent, line: Divider) => {
     e.preventDefault();
     const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-    const move = (ev: MouseEvent) => setSplitRatio((r) => ({ ...r, [id]: Math.max(0.2, Math.min(0.8, (ev.clientX - box.left) / box.width)) }));
+    const row = line.dir === "row";
+    const start = row ? box.left + line.area.x * box.width : box.top + line.area.y * box.height;
+    const length = row ? line.area.w * box.width : line.area.h * box.height;
+    const min = Math.min(0.45, MIN_PANE[line.dir] / length);
+    const cursor = row ? "col-resizing" : "row-resizing";
+    const move = (ev: MouseEvent) => {
+      const at = ((row ? ev.clientX : ev.clientY) - start) / length;
+      setLayout((l) => resizeSplit(l, line.path, line.index, at, min));
+    };
     const up = () => {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
-      document.body.classList.remove("col-resizing");
+      document.body.classList.remove(cursor);
     };
-    document.body.classList.add("col-resizing");
+    document.body.classList.add(cursor);
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
   };
 
-  /** Shows a tab; for the right half of a split, the tab it is in. */
-  const showTab = useCallback((tabId: string) => {
-    const tab = latest.current.tabs.find((t) => t.id === tabId);
-    if (!tab) return;
-    setActiveId(tab.kind === "terminal" && tab.parent ? tab.parent : tab.id);
-  }, []);
+  /** A tab dragged out of its bar, at x, y in the window: works out where a
+   * drop there puts it, as in VS Code, and shows it. Over another group's tabs
+   * it goes in among them, over the middle of a group it moves into that
+   * group, over an edge it gets a new group on that side, and out of the
+   * window it gets a window of its own. */
+  const dragOver = (id: string, x: number | null, y: number | null): DragMode => {
+    const set = (target: DropTarget | null) => {
+      if (JSON.stringify(dropRef.current) === JSON.stringify(target)) return;
+      dropRef.current = target;
+      setDrop(target);
+    };
+    const { tabs: list, layout: lay } = latest.current;
+    const tab = list.find((t) => t.id === id);
+    if (x === null || y === null || !tab) {
+      set(null);
+      return "none";
+    }
+    if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) {
+      const out = list.length > 1;
+      set(out ? { kind: "out" } : null);
+      return out ? "out" : "none";
+    }
+    for (const [g, el] of bars.current) {
+      if (g === tab.group) continue;
+      const r = el.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top - 8 || y > r.bottom + 12) continue;
+      const others = [...el.querySelectorAll<HTMLElement>(":scope > .tab")];
+      let index = others.findIndex((t) => {
+        const b = t.getBoundingClientRect();
+        return x < b.left + b.width / 2;
+      });
+      if (index < 0) index = others.length;
+      set({ kind: "strip", group: g, index });
+      return "move";
+    }
+    const box = panesRef.current?.getBoundingClientRect();
+    if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) {
+      set(null);
+      return "none";
+    }
+    const fx = (x - box.left) / box.width;
+    const fy = (y - box.top) / box.height;
+    let group: string | null = null;
+    let rect: Rect | null = null;
+    for (const [g, r] of paneRects(lay)) {
+      if (fx >= r.x && fx <= r.x + r.w && fy >= r.y && fy <= r.y + r.h) {
+        group = g;
+        rect = r;
+      }
+    }
+    if (!group || !rect) {
+      set(null);
+      return "none";
+    }
+    const dx = (fx - rect.x) / rect.w;
+    const dy = (fy - rect.y) / rect.h;
+    // Within this share of an edge, a drop splits the group; nearer the middle it moves the tab into it.
+    const edge = Math.min(dx, 1 - dx, dy, 1 - dy) < 0.3;
+    const alone = tabsIn(list, group).length === 1 && group === tab.group;
+    if (!edge || alone) {
+      if (group === tab.group) {
+        set(null);
+        return "none";
+      }
+      set({ kind: "move", group, rect });
+      return "move";
+    }
+    if (panesOf(lay).length >= MAX_PANES) {
+      set({ kind: "full", group, rect });
+      return "full";
+    }
+    const side = sideAt(rect, fx, fy);
+    set({ kind: "split", group, side, rect: halfOf(rect, side) });
+    return "split";
+  };
+
+  /** The drag ended: with `dropped`, the tab goes where dragOver showed. */
+  const dragEnd = (id: string, dropped: boolean, screenX: number, screenY: number) => {
+    const target = dropRef.current;
+    dropRef.current = null;
+    setDrop(null);
+    if (!dropped || !target) return;
+    if (target.kind === "out") return void moveToNewWindow(id, { x: screenX, y: screenY });
+    if (target.kind === "strip") return moveToGroup(id, target.group, target.index);
+    if (target.kind === "move") return moveToGroup(id, target.group);
+    if (target.kind === "split") return splitWith(id, target.group, target.side);
+  };
 
   /** Conversations open in a tab here, by Claude session id. */
   const openSessions = useMemo(() => {
@@ -1186,13 +1468,60 @@ export default function App() {
 
   // ---- Render ----
 
-  /** The dot on a tab: what Claude is doing in it, or in its right half. */
-  const tabStatus = (tab: Tab): ClaudeState | undefined => {
-    if (tab.kind !== "terminal") return undefined;
-    const pane = paneOf(tabs, tab.id);
-    const states = [tab.claudeState, pane?.kind === "terminal" ? pane.claudeState : undefined];
-    return states.includes("waiting") ? "waiting" : states.includes("done") ? "done" : states.includes("working") ? "working" : undefined;
+  const focusedGroup = active?.group && groups.includes(active.group) ? active.group : groups[0];
+
+  /** Gives a tab the keyboard once it is drawn, after a click on it or a drag. */
+  const focusTab = (id: string) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => (terminals.get(id) ?? editors.get(id))?.focus()));
+
+  /** A click or focus in a group's view makes its tab the one in use. */
+  const takeTabAt = (target: EventTarget) => {
+    const id = (target as HTMLElement).closest?.("[data-tab]")?.getAttribute("data-tab");
+    if (id && id !== latest.current.activeId && latest.current.tabs.some((t) => t.id === id)) setActiveId(id);
   };
+
+  /** The tabs of the group `g`, with buttons for a new terminal and a new Claude session in it. */
+  const groupBar = (g: string, className?: string, style?: CSSProperties) => (
+    <TabBar
+      key={g}
+      tabs={tabsIn(tabs, g)}
+      activeId={shownIn(tabs, g, groupShown, activeId)?.id ?? null}
+      focused={g === focusedGroup}
+      dropIndex={drop?.kind === "strip" && drop.group === g ? drop.index : null}
+      label={tabLabel}
+      status={tabStatus}
+      tip={tabTip}
+      onActivate={(id) => {
+        setActiveId(id);
+        focusTab(id);
+      }}
+      onClose={(id) => closeTab(id)}
+      onPin={(id) => setTabs((l) => l.map((t) => (t.id === id && t.kind === "file" ? { ...t, preview: false } : t)))}
+      onMenu={tabMenu}
+      onMove={(id, index) => moveToGroup(id, g, index)}
+      onDragOver={dragOver}
+      onDragEnd={(id, dropped, x, y) => {
+        dragEnd(id, dropped, x, y);
+        focusTab(id);
+      }}
+      barRef={(el) => {
+        if (el) bars.current.set(g, el);
+        else bars.current.delete(g);
+      }}
+      className={className}
+      style={style}
+    >
+      <button type="button" className="tab-new" title="New Terminal (⌘T)" onClick={() => newTerminal(false, undefined, g)}>
+        <Plus size={15} />
+      </button>
+      <button type="button" className="tab-new claude" title="New Claude Session (⇧⌘T)" onClick={() => newTerminal(true, undefined, g)}>
+        <Claude size={17} />
+      </button>
+    </TabBar>
+  );
+
+  /** The dot on a tab: what Claude is doing in it. */
+  const tabStatus = (tab: Tab): ClaudeState | undefined => (tab.kind === "terminal" ? tab.claudeState : undefined);
 
   /** A terminal tab's tooltip: the Claude conversation's usage so far. */
   const tabTip = (tab: Tab): string | undefined => {
@@ -1224,11 +1553,12 @@ export default function App() {
           })),
       },
     ];
+    commands.push(
+      { id: "split", label: "Split Terminal", icon: <Split size={14} />, shortcut: "⌘D", run: () => void splitTerminal("right") },
+      { id: "split-down", label: "Split Terminal Down", icon: <SplitDown size={14} />, shortcut: "⇧⌘D", run: () => void splitTerminal("bottom") },
+    );
     if (current?.kind === "terminal") {
-      commands.push(
-        { id: "split", label: "Split Terminal", icon: <Split size={14} />, shortcut: "⌘D", run: () => void splitTerminal(current.parent ?? current.id) },
-        { id: "clear", label: "Clear Terminal", icon: <SquareTerminal size={14} />, shortcut: "⌘K", run: () => terminals.get(current.id)?.clear() },
-      );
+      commands.push({ id: "clear", label: "Clear Terminal", icon: <SquareTerminal size={14} />, shortcut: "⌘K", run: () => terminals.get(current.id)?.clear() });
     }
     commands.push(
       { id: "open-folder", label: "Open Folder…", icon: <FolderOpen size={14} />, shortcut: "⌘O", run: () => void chooseFolder() },
@@ -1582,27 +1912,17 @@ export default function App() {
             </span>
           )}
         </div>
-        <TabBar
-          tabs={shownTabs(tabs)}
-          activeId={activeId}
-          label={tabLabel}
-          status={tabStatus}
-          tip={tabTip}
-          canTearOff={shownTabs(tabs).length > 1}
-          onActivate={setActiveId}
-          onClose={(id) => closeTab(id)}
-          onPin={(id) => setTabs((l) => l.map((t) => (t.id === id && t.kind === "file" ? { ...t, preview: false } : t)))}
-          onMenu={tabMenu}
-          onMove={moveTab}
-          onTearOff={(id, x, y) => void moveToNewWindow(id, { x, y })}
-        >
-          <button type="button" className="tab-new" title="New Terminal (⌘T)" onClick={() => newTerminal(false)}>
-            <Plus size={15} />
-          </button>
-          <button type="button" className="tab-new claude" title="New Claude Session (⇧⌘T)" onClick={() => newTerminal(true)}>
-            <Claude size={17} />
-          </button>
-        </TabBar>
+        {/* The tabs of the groups along the top, each above its group. */}
+        <div className="titlebar-tabs" ref={titleTabsRef} data-tauri-drag-region>
+          {groups.map((g) => {
+            const r = rects.get(g)!;
+            if (!atTop(r)) return null;
+            return groupBar(g, r.x > 1e-6 ? "in-title after-split" : "in-title", {
+              left: `max(0px, calc(var(--cl, 0px) + var(--cw, 100%) * ${r.x}))`,
+              right: `max(0px, calc(100% - var(--cl, 0px) - var(--cw, 100%) * ${r.x + r.w}))`,
+            });
+          })}
+        </div>
         <div className="titlebar-actions">
           <UpdateButton app="Lookout" repo="lakiAlex/lookout" restartNote="Running terminals end." notify={settings.banners} />
           {git && <GitChip status={git} open={panel === "git"} onClick={() => setPanel((p) => (p === "git" ? null : "git"))} />}
@@ -1732,66 +2052,110 @@ export default function App() {
 
       <main className="content">
         {memes && <MemeButton />}
-        {active && paneOf(tabs, active.id) && (
-          <div className="split-divider" style={{ left: `${(splitRatio[active.id] ?? 0.5) * 100}%` }} onMouseDown={(e) => startSplitResize(e, active.id)} />
+        {clipNote && (
+          <div key={clipNote.key} className={`clip-note${memes ? " above-meme" : ""}${clipNote.leaving ? " leaving" : ""}`} role="status">
+            <Check size={13} /> {clipNote.text}
+          </div>
         )}
-        {tabs.map((tab) => {
-          if (tab.kind === "terminal") {
-            // A split tab shows its terminal on the left and the pane's on the right.
-            const parent = tab.parent ? tabs.find((t) => t.id === tab.parent) : undefined;
-            const pane = parent ? undefined : paneOf(tabs, tab.id);
-            const ratio = splitRatio[parent?.id ?? tab.id] ?? 0.5;
+        {/* Every tab's view, at its group's place; each group shows one. They
+            stay in this one parent, so a tab moved to another group keeps its
+            terminal or editor running. */}
+        <div
+          className="panes"
+          ref={panesRef}
+          onPointerDownCapture={(e) => takeTabAt(e.target)}
+          onFocusCapture={(e) => takeTabAt(e.target)}
+        >
+          {groups.map((g) => {
+            const r = rects.get(g)!;
+            if (atTop(r)) return null;
             return (
-              <TerminalView
-                key={tab.id}
-                tabId={tab.id}
-                cwd={tab.cwd}
-                run={tab.run}
-                sessionId={tab.snapshot !== undefined ? tab.sessionId : null}
-                snapshot={tab.snapshot}
-                active={(parent?.id ?? tab.id) === activeId}
-                split={parent ? "right" : pane ? "left" : undefined}
-                style={parent ? { left: `${ratio * 100}%` } : pane ? { right: `${(1 - ratio) * 100}%` } : undefined}
-                theme={theme}
-                terminalTheme={terminalTheme}
-                fontSize={fontSize}
-                settings={settings}
-                // The screen copy of a moved tab is not needed once its session is attached.
-                onSession={(sessionId) => setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, sessionId, snapshot: undefined } : t)))}
-                onEvent={(event) => void terminalEvent(tab.id, event)}
-              />
+              <div key={g} className="group-tabs" style={{ left: `${r.x * 100}%`, top: `${r.y * 100}%`, width: `${r.w * 100}%`, height: GROUP_TABS }}>
+                {groupBar(g)}
+              </div>
             );
-          }
-          if (tab.kind === "file") {
+          })}
+          {tabs.map((tab) => {
+            const g = tab.group && rects.has(tab.group) ? tab.group : groups[0];
+            const r = rects.get(g)!;
+            const style = groups.length > 1 ? rectStyle(r, atTop(r) ? 0 : GROUP_TABS) : undefined;
+            const shown = shownIn(tabs, g, groupShown, activeId)?.id === tab.id;
+            const primary = tab.id === activeId;
+            if (tab.kind === "terminal") {
+              return (
+                <TerminalView
+                  key={tab.id}
+                  tabId={tab.id}
+                  cwd={tab.cwd}
+                  run={tab.run}
+                  sessionId={tab.snapshot !== undefined ? tab.sessionId : null}
+                  snapshot={tab.snapshot}
+                  active={shown}
+                  inSplit={groups.length > 1}
+                  primary={primary}
+                  onClipboard={noteClipboard}
+                  style={style}
+                  theme={theme}
+                  terminalTheme={terminalTheme}
+                  fontSize={fontSize}
+                  settings={settings}
+                  // The screen copy of a moved tab is not needed once its session is attached.
+                  onSession={(sessionId) => setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "terminal" ? { ...t, sessionId, snapshot: undefined } : t)))}
+                  onEvent={(event) => void terminalEvent(tab.id, event)}
+                />
+              );
+            }
+            if (tab.kind === "file") {
+              return (
+                <EditorView
+                  key={tab.id}
+                  tabId={tab.id}
+                  path={tab.path}
+                  active={shown}
+                  primary={primary}
+                  style={style}
+                  reveal={tab.reveal}
+                  text={tab.text}
+                  wordWrap={settings.wordWrap}
+                  onDirty={(dirty) =>
+                    setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "file" ? { ...t, dirty, preview: dirty ? false : t.preview } : t)))
+                  }
+                  onSaved={() => void refreshGit()}
+                  onError={(m) => toast("error", m)}
+                />
+              );
+            }
             return (
-              <EditorView
+              <DiffView
                 key={tab.id}
                 tabId={tab.id}
+                root={tab.root}
                 path={tab.path}
-                active={tab.id === activeId}
-                reveal={tab.reveal}
-                text={tab.text}
-                wordWrap={settings.wordWrap}
-                onDirty={(dirty) =>
-                  setTabs((l) => l.map((t) => (t.id === tab.id && t.kind === "file" ? { ...t, dirty, preview: dirty ? false : t.preview } : t)))
-                }
-                onSaved={() => void refreshGit()}
-                onError={(m) => toast("error", m)}
+                staged={tab.staged}
+                active={shown}
+                style={style}
+                version={dataVersion}
+                onOpenFile={() => openFile(`${tab.root}/${tab.path}`, true)}
               />
             );
-          }
-          return (
-            <DiffView
-              key={tab.id}
-              root={tab.root}
-              path={tab.path}
-              staged={tab.staged}
-              active={tab.id === activeId}
-              version={dataVersion}
-              onOpenFile={() => openFile(`${tab.root}/${tab.path}`, true)}
-            />
-          );
-        })}
+          })}
+          {groups.length > 1 &&
+            dividers(layout).map((line) => (
+              <div
+                key={`${line.path.join(".")}:${line.index}`}
+                className={`split-divider ${line.dir}`}
+                style={
+                  line.dir === "row"
+                    ? { left: `${line.at * 100}%`, top: `${line.area.y * 100}%`, height: `${line.area.h * 100}%` }
+                    : { top: `${line.at * 100}%`, left: `${line.area.x * 100}%`, width: `${line.area.w * 100}%` }
+                }
+                onMouseDown={(e) => startSplitResize(e, line)}
+              />
+            ))}
+          {drop && (drop.kind === "move" || drop.kind === "split" || drop.kind === "full") && (
+            <div className={`drop-zone${drop.kind === "full" ? " full" : ""}`} style={rectStyle(drop.rect)} />
+          )}
+        </div>
         {picks.length > 0 && active?.kind === "terminal" && (
           <div className="pick-strip">
             <span className="pick-strip-title">Picked</span>

@@ -90,6 +90,11 @@ body.col-resizing * {
   cursor: col-resize !important;
 }
 
+body.row-resizing,
+body.row-resizing * {
+  cursor: row-resize !important;
+}
+
 input[type="checkbox"] {
   accent-color: var(--accent);
 }
@@ -1135,23 +1140,61 @@ body.col-resizing .app {
   background: var(--chrome);
 }
 
-/* The two halves of a split tab, with a line to drag between them. */
-.terminal-view.split-right {
-  box-shadow: inset 1px 0 0 var(--border);
+/* The terminals. The panes of a split tab sit at their places in here. */
+.panes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
+.panes > * {
+  pointer-events: auto;
+}
+
+/* The lines between the panes of a split tab, to drag. */
 .split-divider {
   position: absolute;
-  top: 0;
-  bottom: 0;
   z-index: 5;
-  width: 7px;
-  margin-left: -3px;
-  cursor: col-resize;
+  --line: var(--border-strong);
 }
 
 .split-divider:hover {
-  background: linear-gradient(to right, transparent 3px, var(--focus) 3px, var(--focus) 4px, transparent 4px);
+  --line: var(--focus);
+}
+
+.split-divider.row {
+  width: 7px;
+  margin-left: -3px;
+  cursor: col-resize;
+  background: linear-gradient(to right, transparent 3px, var(--line) 3px, var(--line) 4px, transparent 4px);
+}
+
+.split-divider.column {
+  height: 7px;
+  margin-top: -3px;
+  cursor: row-resize;
+  background: linear-gradient(to bottom, transparent 3px, var(--line) 3px, var(--line) 4px, transparent 4px);
+}
+
+/* Where a tab dragged from the bar goes: the half of the pane under the pointer. */
+.panes > .drop-zone {
+  position: absolute;
+  z-index: 6;
+  margin: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--blue) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 55%, transparent);
+  pointer-events: none;
+  transition:
+    left 0.12s,
+    top 0.12s,
+    right 0.12s,
+    bottom 0.12s;
+}
+
+.panes > .drop-zone.full {
+  background: color-mix(in srgb, var(--chrome) 70%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .terminal-host {
@@ -1515,7 +1558,7 @@ body.col-resizing .app {
   border-radius: 50%;
 }
 
-.content:has(.pick-strip) .terminal-view {
+.content:has(.pick-strip) .panes {
   bottom: 44px;
 }
 
@@ -1715,6 +1758,56 @@ body.col-resizing .app {
   bottom: 58px;
 }
 
+/* "Copied" or "Pasted" for a moment after a copy or paste in a terminal, above the meme button. */
+.clip-note {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: linear-gradient(var(--group-bg), var(--group-bg)), var(--chrome);
+  box-shadow: var(--group-ring), 0 4px 14px rgba(0, 0, 0, 0.3);
+  color: var(--fg);
+  font-size: 12px;
+  pointer-events: none;
+  animation: clip-note-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.clip-note.leaving {
+  animation: clip-note-out 0.25s ease-in forwards;
+}
+
+.clip-note.above-meme {
+  bottom: 64px;
+}
+
+.content:has(.pick-strip) .clip-note {
+  bottom: 58px;
+}
+
+.content:has(.pick-strip) .clip-note.above-meme {
+  bottom: 106px;
+}
+
+@keyframes clip-note-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.92);
+  }
+}
+
+@keyframes clip-note-out {
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 .meme-backdrop {
   position: fixed;
   inset: 0;
@@ -1816,6 +1909,78 @@ body.col-resizing .app {
 .tabs.dragging,
 .tabs.dragging .tab {
   cursor: grabbing;
+}
+
+/* ---- Groups ---- */
+
+/* The tabs of the groups along the top, each above its group (App sets --cl
+   and --cw: where the content starts and how wide it is). */
+.titlebar-tabs {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.titlebar-tabs > .tabs {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: auto;
+}
+
+/* A group that starts right of another: a line in line with the one between them. */
+.titlebar-tabs > .tabs.after-split {
+  padding-left: 7px;
+  box-shadow: inset 1px 0 0 var(--border-strong);
+}
+
+/* The tabs of a group below another, at its top. */
+.group-tabs {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: var(--chrome);
+  box-shadow:
+    inset 0 -1px 0 var(--border),
+    inset 0 1px 0 var(--border-strong);
+}
+
+.group-tabs > .tabs {
+  flex: 1;
+}
+
+/* The tab in view of a group without the keyboard is lighter. */
+.tabs:not(.focused) .tab.active {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  color: var(--fg);
+}
+
+/* Where a tab dragged from another group goes in among these. */
+.tab {
+  position: relative;
+}
+
+.tab.drop-before::before,
+.tab.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--blue);
+}
+
+.tab.drop-before::before {
+  left: -3px;
+}
+
+.tab.drop-after::after {
+  right: -3px;
 }
 
 /* Dragged out: the tab waits in its place while the ghost shows the new window. */
@@ -2642,6 +2807,7 @@ body.col-resizing .app {
   .bell-button.ringing svg,
   .bell-badge,
   .tab-ghost,
+  .clip-note,
   .git-chip-count,
   .git-chip-added,
   .git-chip-removed {

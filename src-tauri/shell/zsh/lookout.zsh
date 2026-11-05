@@ -36,6 +36,14 @@ _lookout_precmd() {
 add-zsh-hook preexec _lookout_preexec
 precmd_functions=(_lookout_precmd $precmd_functions)
 
+# OSC 7701 "input" when zsh starts reading a command line, where the cursor is
+# right after the prompt, so ⌘A in Lookout selects only what is typed.
+autoload -Uz add-zle-hook-widget
+_lookout_line_init() {
+  printf '\e]7701;input\a'
+}
+add-zle-hook-widget line-init _lookout_line_init
+
 # Claude Code started here loads claude-settings.json, whose hooks (session
 # start, prompt, tool use, stop and notification) save the hook's JSON to a file
 # in $LOOKOUT_HOOKS and send its path to this terminal as OSC 7701

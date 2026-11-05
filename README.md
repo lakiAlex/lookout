@@ -25,13 +25,17 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 - New terminals start with "Last login: ..." as in Terminal, unless `~/.hushlogin` exists. Settings > Last login message turns it off.
 - Tab titles follow the running program, and tabs running Claude Code get the Claude icon.
 - GPU rendering, clickable links, find (⌘F) and clear (⌘K).
+- The window splits into up to 5 groups, as in VS Code. ⌘D opens a terminal in a new group on the right and ⇧⌘D one below. Each group has its own tabs and its own new terminal and Claude buttons: in the title bar above the group, or at the top of a group that is below another. Drag a tab along its group's tabs to reorder it, onto another group's tabs or the middle of another group to move it there, or onto an edge of a group to put it in a new group on that side. The part of the window it goes to is highlighted. A group closes with its last tab. Drag the lines between groups to resize them, and ⌥⌘ and an arrow key goes to the group on that side. The tab's menu has the same splits and Move to New Group on the Right or Below.
+- ⌘A selects what is typed at the prompt: the command line in zsh, or the text in Claude Code's prompt. Copying it leaves out the indent of wrapped lines. Elsewhere ⌘A selects everything.
+- Copying from a terminal or pasting into one shows Copied or Pasted above the meme button for a moment.
+- In dark mode Claude Code's prompt lines are drawn at half their brightness.
 - Keys set up for Claude Code: Shift+Return is a new line in the prompt, ⌘← and ⌘→ go to the start and end of the line, ⌘⌫ deletes the line, ⌥← and ⌥→ move by word, ⌥⌫ deletes a word.
 - For zsh, Lookout loads your own `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin` and then adds what is missing: a colored prompt with the folder and git branch when you use the macOS default prompt, command highlighting with zsh-syntax-highlighting when you do not load it yourself, and colored `ls` output. It also marks where each command starts and ends, for notifications, and starts `claude` with two hooks that report when Claude is done (see Notifications). This only applies inside Lookout.
 
 **Windows**
 
 - ⌘N, or New Window in the Dock icon's menu, opens another window on the same folder. Each window has its own folder, tabs and panels, and closing a window ends its terminals.
-- Drag a tab along the tab bar to reorder it, or drag it down out of the bar and let go to open it in a window of its own. A terminal keeps running and keeps what is on screen, and a file keeps unsaved changes. The tab's menu has Move to New Window too.
+- Drag a tab out of the window and let go to open it in a window of its own. A terminal keeps running and keeps what is on screen, and a file keeps unsaved changes. The tab's menu has Move to New Window too.
 - ⇧⌘W closes the window.
 - The window layout button in the top bar opens a panel with four layouts, as in the Rectangle app: left half, right half, center and fill the screen. Clicking left or right again steps the width through 1/2, 2/3 and 1/3, clicking center again makes the window larger, and clicking fill again puts the window back where it was. The tile for the current layout is highlighted. The layouts use the screen without the menu bar and the Dock.
 

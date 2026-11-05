@@ -3,7 +3,7 @@ import { MergeView } from "@codemirror/merge";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { FileText } from "./icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, basename } from "../api";
 import { editorTheme, highlight, languageFor } from "../lib/editor";
 
@@ -16,6 +16,9 @@ interface DiffViewProps {
   /** Changes when the files or the repository changed, to load again. */
   version: number;
   onOpenFile: () => void;
+  tabId: string;
+  /** Its place, in a split window. */
+  style?: CSSProperties;
 }
 
 export function DiffView(props: DiffViewProps) {
@@ -72,7 +75,7 @@ export function DiffView(props: DiffViewProps) {
   useEffect(() => () => merge.current?.destroy(), []);
 
   return (
-    <div className={`diff-view${props.active ? "" : " hidden"}`}>
+    <div className={`diff-view${props.active ? "" : " hidden"}`} style={props.style} data-tab={props.tabId}>
       <div className="diff-header">
         <span className="diff-title">
           {props.path}

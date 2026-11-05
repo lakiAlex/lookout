@@ -6,6 +6,7 @@ import {
   ArrowDown02Icon,
   ArrowRight01Icon,
   ArrowShrink02Icon,
+  ArrowUpRight01Icon,
   ArrowUp01Icon,
   ArrowUp02Icon,
   AtIcon,
@@ -32,6 +33,7 @@ import {
   GitGraphIcon,
   HistoryIcon,
   LayoutTwoColumnIcon,
+  LayoutTwoRowIcon,
   LinkSquare02Icon,
   ServerStack02Icon,
   CommandIcon,
@@ -108,6 +110,8 @@ export const GitCompare = icon(GitCompareIcon);
 export const GitGraph = icon(GitGraphIcon);
 export const History = icon(HistoryIcon);
 export const Split = icon(LayoutTwoColumnIcon);
+export const SplitDown = icon(LayoutTwoRowIcon);
+export const MoveOut = icon(ArrowUpRight01Icon);
 export const ExternalLink = icon(LinkSquare02Icon);
 export const Server = icon(ServerStack02Icon);
 export const Command = icon(CommandIcon);
