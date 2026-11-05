@@ -127,6 +127,11 @@ impl Sessions {
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "Lookout");
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
+        // Claude Code's hooks leave their JSON here and send Lookout only the
+        // file's path (see shell/claude-settings.json).
+        if let Ok(dir) = crate::hooks_dir(&app) {
+            cmd.env("LOOKOUT_HOOKS", dir);
+        }
         if std::env::var("LANG").is_err() {
             cmd.env("LANG", "en_US.UTF-8");
         }

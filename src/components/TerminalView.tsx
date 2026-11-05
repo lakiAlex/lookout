@@ -196,8 +196,9 @@ export function TerminalView(props: TerminalViewProps) {
     });
 
     // Lookout's marks, OSC 7701 (see shell/zsh/lookout.zsh): a command
-    // starting and ending, and the JSON of Claude Code's hooks.
+    // starting and ending, and the path of a file with a Claude Code hook's JSON.
     let command: { line: string; at: number } | null = null;
+    let hooks: Promise<void> = Promise.resolve();
     term.parser.registerOscHandler(7701, (data) => {
       const [kind, ...rest] = data.split(";");
       const value = rest.join(";");
@@ -206,7 +207,16 @@ export function TerminalView(props: TerminalViewProps) {
       } else if (kind === "end" && command) {
         latest.current.onEvent({ type: "command", line: command.line, exitCode: Number(value) || 0, seconds: (Date.now() - command.at) / 1000 });
         command = null;
+      } else if (kind === "claude-file") {
+        // One at a time, so the events keep their order.
+        hooks = hooks
+          .then(() => api.claudeHook(value))
+          .then((hook) => {
+            if (hook && typeof hook.hook_event_name === "string") latest.current.onEvent({ type: "claude", hook: hook as unknown as ClaudeHook });
+          })
+          .catch(() => undefined);
       } else if (kind === "claude") {
+        // Claude sessions started before the hooks moved to files.
         const hook = decodeHook(value);
         if (hook) latest.current.onEvent({ type: "claude", hook });
       }

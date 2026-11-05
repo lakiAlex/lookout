@@ -2690,3 +2690,169 @@ body.col-resizing .app {
   pointer-events: none;
   animation: ghost-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.25);
 }
+
+/* ---- Window layout ---- */
+
+/* One button; clicking it opens a panel of layout tiles, like the notifications panel. */
+.window-snap {
+  position: relative;
+  display: inline-flex;
+}
+
+.snap-trigger {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--fg-3);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.snap-trigger:hover,
+.snap-trigger.open {
+  color: var(--fg-strong);
+  background: var(--hover);
+}
+
+.snap-trigger.open {
+  background: var(--raised);
+  box-shadow: var(--raised-shadow);
+}
+
+.snap-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -6px;
+  z-index: 70;
+  width: 268px;
+  padding: 10px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-subtle) 82%, transparent);
+  backdrop-filter: blur(28px) saturate(1.7);
+  box-shadow: var(--shadow-menu);
+  transform-origin: calc(100% - 20px) 0;
+  animation: snap-panel-in 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+:root[data-theme="light"] .snap-panel {
+  background: rgba(250, 250, 252, 0.86);
+}
+
+@keyframes snap-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+}
+
+.snap-title {
+  padding: 2px 4px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.snap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.snap-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px 8px;
+  border: none;
+  border-radius: 10px;
+  background: var(--group-bg);
+  box-shadow: var(--group-ring);
+  color: var(--fg-2);
+  animation: snap-tile-in 0.32s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  transition:
+    background-color 0.12s,
+    color 0.12s,
+    transform 0.15s cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+
+.snap-tile:nth-child(2) { animation-delay: 30ms; }
+.snap-tile:nth-child(3) { animation-delay: 60ms; }
+.snap-tile:nth-child(4) { animation-delay: 90ms; }
+
+@keyframes snap-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.95);
+  }
+}
+
+.snap-tile:hover {
+  color: var(--fg-strong);
+  background: var(--hover);
+}
+
+.snap-tile:active {
+  transform: scale(0.96);
+}
+
+.snap-tile.active {
+  color: var(--fg-strong);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.snap-picture {
+  margin-bottom: 5px;
+}
+
+.snap-screen {
+  fill: color-mix(in srgb, var(--fg) 5%, transparent);
+  stroke: color-mix(in srgb, var(--fg) 30%, transparent);
+  stroke-width: 1.5;
+}
+
+.snap-window {
+  fill: color-mix(in srgb, var(--fg) 32%, transparent);
+  transition:
+    fill 0.15s,
+    transform 0.25s cubic-bezier(0.34, 1.45, 0.5, 1);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.snap-tile:hover .snap-window,
+.snap-tile.active .snap-window {
+  fill: var(--accent);
+}
+
+.snap-tile:hover .snap-window {
+  transform: scale(1.04);
+}
+
+.snap-label {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.snap-hint {
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+
+/* The light theme's white button style would otherwise cover the red of a danger button. */
+:root[data-theme="light"] .button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+:root[data-theme="light"] .button.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 88%, #000);
+  border-color: color-mix(in srgb, var(--danger) 88%, #000);
+}

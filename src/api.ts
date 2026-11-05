@@ -131,6 +131,7 @@ export function toAppError(e: unknown): AppError {
 }
 
 export const api = {
+  claudeHook: (path: string) => invoke<Record<string, unknown> | null>("claude_hook", { path }),
   pickerStart: () => invoke<void>("picker_start"),
   pickerCancel: () => invoke<void>("picker_cancel"),
   pickerSetEnabled: (enabled: boolean) => invoke<void>("picker_set_enabled", { enabled }),

@@ -53,6 +53,41 @@ fn pty_spawn(
     state.sessions.spawn(app, window.label(), cwd, cols, rows, run, login, on_data)
 }
 
+/// The folder Claude Code's hooks write their JSON to, made when missing.
+pub(crate) fn hooks_dir(app: &AppHandle) -> std::io::Result<PathBuf> {
+    let dir = app.path().app_cache_dir().map_err(std::io::Error::other)?.join("hooks");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Reads a Claude Code hook's JSON from the file its hook wrote, deletes the
+/// file and returns the fields Lookout uses. The full JSON can be megabytes
+/// (PostToolUse carries the tool's whole output), so it is passed as a file
+/// instead of through the terminal, where it got mixed into Claude's screen.
+#[tauri::command]
+fn claude_hook(app: AppHandle, path: String) -> AppResult<Option<serde_json::Value>> {
+    let path = PathBuf::from(path);
+    let named = path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("lookout-hook."));
+    let parent = path.parent().and_then(|p| p.canonicalize().ok());
+    let allowed = [hooks_dir(&app).ok(), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))]
+        .into_iter()
+        .flatten()
+        .filter_map(|d| d.canonicalize().ok())
+        .any(|d| Some(&d) == parent.as_ref());
+    if !named || !allowed {
+        return Ok(None);
+    }
+    let text = std::fs::read(&path);
+    let _ = std::fs::remove_file(&path);
+    let Ok(full) = serde_json::from_slice::<serde_json::Value>(&text?) else {
+        return Ok(None);
+    };
+    const KEEP: [&str; 7] = ["hook_event_name", "session_id", "transcript_path", "cwd", "message", "notification_type", "stop_hook_active"];
+    let kept: serde_json::Map<String, serde_json::Value> =
+        KEEP.iter().filter_map(|k| full.get(*k).map(|v| (k.to_string(), v.clone()))).collect();
+    Ok(Some(serde_json::Value::Object(kept)))
+}
+
 #[tauri::command]
 fn pty_detach(state: State<AppState>, id: String) -> AppResult<()> {
     state.sessions.detach(&id)
@@ -415,6 +450,15 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             std::fs::create_dir_all(&dir)?;
+            // Hook files no terminal read, from tabs closed before they arrived.
+            if let Ok(hooks) = hooks_dir(app.handle()) {
+                let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+                for entry in std::fs::read_dir(hooks).into_iter().flatten().flatten() {
+                    if entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < old) {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
             app.manage(AppState {
                 sessions: Sessions::default(),
                 picker: picker::Picker::default(),
@@ -449,6 +493,7 @@ pub fn run() {
             picker_set_enabled,
             copy_text,
             pty_spawn,
+            claude_hook,
             pty_detach,
             pty_attach,
             pty_write,

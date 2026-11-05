@@ -33,6 +33,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 - ⌘N, or New Window in the Dock icon's menu, opens another window on the same folder. Each window has its own folder, tabs and panels, and closing a window ends its terminals.
 - Drag a tab along the tab bar to reorder it, or drag it down out of the bar and let go to open it in a window of its own. A terminal keeps running and keeps what is on screen, and a file keeps unsaved changes. The tab's menu has Move to New Window too.
 - ⇧⌘W closes the window.
+- The window layout button in the top bar opens a panel with four layouts, as in the Rectangle app: left half, right half, center and fill the screen. Clicking left or right again steps the width through 1/2, 2/3 and 1/3, clicking center again makes the window larger, and clicking fill again puts the window back where it was. The tile for the current layout is highlighted. The layouts use the screen without the menu bar and the Dock.
 
 **Element picker**
 
@@ -72,7 +73,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 
 **Settings**
 
-- Light and dark mode in the top bar.
+- Light and dark mode in the top bar, next to the window layout button.
 - The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), code font for the terminal and the editor (SF Mono, Geist Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), interface font (SF Pro or Geist), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, the last login message, scrollback length, the element picker on or off, word wrap in the editor, Mac notifications, and memes. Geist and Geist Mono ship with Lookout.
 - Settings changed in one window apply to the other windows.
 - The sidebar minimizes to a narrow strip with small icons.
@@ -97,13 +98,21 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 
 ## Install
 
-Download `Lookout_<version>_aarch64.dmg` from [Releases](../../releases), open it, and drag `Lookout` into the Applications folder. The build is for Apple Silicon Macs and needs macOS 11 or later. A `.app.zip` is attached too.
+With Homebrew:
 
-The app is not signed with an Apple Developer certificate or notarized, so the first time you open it macOS says it cannot be verified. Either right-click the app and choose Open, then confirm once, or run:
+```sh
+brew install --cask lakialex/tap/lookout
+```
+
+Or download `Lookout_<version>_universal.dmg` from [Releases](../../releases), open it, and drag `Lookout` into the Applications folder. The build runs on Apple Silicon and Intel Macs and needs macOS 11 or later. A `.app.tar.gz` is attached too.
+
+The app is not signed with an Apple Developer certificate or notarized, so the first time you open a download macOS says it cannot be verified. Either right-click the app and choose Open, then confirm once, or run:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Lookout.app
 ```
+
+The Homebrew cask does this for you.
 
 The picker needs two permissions, which Lookout asks for the first time you pick:
 
