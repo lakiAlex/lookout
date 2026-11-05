@@ -1,6 +1,6 @@
 [package]
 name = "lookout"
-version = "1.4.0"
+version = "1.4.1"
 description = "Terminal for Claude Code, with files, search, git and an element picker"
 authors = []
 edition = "2024"
@@ -43,3 +43,5 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 muda = { version = "0.20", default-features = false }
 objc2 = "0.6"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"

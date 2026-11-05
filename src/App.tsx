@@ -44,6 +44,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import { api, basename, dirname, relative, tildify, toAppError, type AppError, type Entry, type GitFile, type GitStatus, type Notice, type Pick } from "./api";
 import { SidebarIcon, type SidebarIconName } from "./components/SidebarIcon";
 import { MemeButton } from "./components/Meme";
+import { UpdateButton } from "./components/Update";
 import { WindowSnap } from "./components/WindowSnap";
 import { ContextMenu, type MenuEntry, type MenuState } from "./components/ContextMenu";
 import { ChoiceDialog, InputDialog } from "./components/Dialogs";
@@ -1603,6 +1604,7 @@ export default function App() {
           </button>
         </TabBar>
         <div className="titlebar-actions">
+          <UpdateButton app="Lookout" repo="lakiAlex/lookout" restartNote="Running terminals end." notify={settings.banners} />
           {git && <GitChip status={git} open={panel === "git"} onClick={() => setPanel((p) => (p === "git" ? null : "git"))} />}
           <WindowSnap />
           <button

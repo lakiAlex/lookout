@@ -117,6 +117,8 @@ xattr -dr com.apple.quarantine /Applications/Lookout.app
 
 The Homebrew cask does this for you.
 
+Lookout checks GitHub for new versions. When one is out, an Update button shows in the title bar with what changed, and Update and restart installs it. Versions from before the update button need one `brew upgrade --cask lookout` or a new download to get it.
+
 The picker needs two permissions, which Lookout asks for the first time you pick:
 
 - Accessibility, to read elements in other apps. System Settings, Privacy & Security, Accessibility, switch Lookout on.
@@ -152,6 +154,7 @@ cargo test
 | `src-tauri/src/shell.rs`, `src-tauri/shell/` | zsh startup files, zsh-syntax-highlighting and the Claude Code hooks |
 | `src-tauri/src/files.rs`, `search.rs`, `git.rs` | Files and the file watcher, search, git |
 | `src/App.tsx` | Layout, tabs, menus, settings, shortcuts |
+| `src/components/Update.tsx` | The update button and panel, shared with Dispatch, Cells and Patchy. `VITE_FAKE_UPDATE=1 pnpm tauri dev` shows a made-up update. |
 | `src/components/` | Terminal, editor, diff view, panels, menus, dialogs |
 | `src/lib/` | Editor and terminal themes, settings |
 | `patches/` | A fix for xterm.js's WebGL renderer, applied by pnpm |
