@@ -56,18 +56,20 @@ function stored(): Partial<Settings> {
 }
 
 export function loadSettings(): Settings {
-  return { ...DEFAULT_SETTINGS, ...stored() };
+  const settings = { ...DEFAULT_SETTINGS, ...stored() };
+  // A code font no longer offered, like Geist Mono, falls back to the default.
+  if (!FONTS.some((f) => f.id === settings.font)) settings.font = DEFAULT_SETTINGS.font;
+  return settings;
 }
 
 export function saveSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
   localStorage.setItem(KEY, JSON.stringify({ ...stored(), [key]: value }));
 }
 
-/** Monospace fonts. SF Mono, Menlo and Monaco come with macOS and Geist Mono
- * ships with Lookout; the rest are listed when installed. */
+/** Monospace fonts. SF Mono, Menlo and Monaco come with macOS; the rest are
+ * listed when installed. */
 export const FONTS = [
   { id: "sf-mono", label: "SF Mono", family: null, css: 'ui-monospace, "SF Mono", Menlo, monospace' },
-  { id: "geist-mono", label: "Geist Mono", family: "Geist Mono Variable", css: '"Geist Mono Variable", Menlo, monospace' },
   { id: "menlo", label: "Menlo", family: "Menlo", css: "Menlo, monospace" },
   { id: "monaco", label: "Monaco", family: "Monaco", css: "Monaco, Menlo, monospace" },
   { id: "jetbrains-mono", label: "JetBrains Mono", family: "JetBrains Mono", css: '"JetBrains Mono", Menlo, monospace' },
@@ -78,7 +80,7 @@ export const FONTS = [
   { id: "hack", label: "Hack", family: "Hack", css: "Hack, Menlo, monospace" },
 ];
 
-const BUILT_IN = new Set(["sf-mono", "geist-mono", "menlo", "monaco"]);
+const BUILT_IN = new Set(["sf-mono", "menlo", "monaco"]);
 
 /** Fonts for the app around the terminal and the editor: menus, panels, tabs.
  * Geist ships with Lookout. Proportional fonts are not offered for the

@@ -19,6 +19,7 @@ import {
   CheckmarkCircle02Icon,
   CleanIcon,
   ClipboardIcon,
+  ColorsIcon,
   ComputerTerminal01Icon,
   Copy01Icon,
   CursorTextIcon,
@@ -47,6 +48,7 @@ import {
   NotificationSquareIcon,
   OptionIcon,
   ParagraphSpacingIcon,
+  PaintBoardIcon,
   PencilEdit02Icon,
   PlusSignIcon,
   RefreshIcon,
@@ -97,6 +99,7 @@ export const ChevronDown = icon(ArrowDown01Icon);
 export const ChevronRight = icon(ArrowRight01Icon);
 export const ChevronUp = icon(ArrowUp01Icon);
 export const ClipboardCopy = icon(ClipboardIcon);
+export const Colors = icon(ColorsIcon);
 export const Code = icon(SourceCodeIcon);
 export const Copy = icon(Copy01Icon);
 export const Ellipsis = icon(MoreHorizontalIcon);
@@ -121,6 +124,7 @@ export const LoaderCircle = icon(Loading03Icon);
 export const Minus = icon(MinusSignIcon);
 export const Moon = icon(Moon02Icon);
 export const Option = icon(OptionIcon);
+export const Palette = icon(PaintBoardIcon);
 export const Pencil = icon(PencilEdit02Icon);
 export const Plus = icon(PlusSignIcon);
 export const RefreshCw = icon(RefreshIcon);

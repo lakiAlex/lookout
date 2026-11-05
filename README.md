@@ -78,7 +78,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 **Settings**
 
 - Light and dark mode in the top bar, next to the window layout button.
-- The gear at the bottom of the sidebar has: editor theme and terminal theme (15 popular VS Code themes, One Dark Pro by default), code font for the terminal and the editor (SF Mono, Geist Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), interface font (SF Pro or Geist), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, the last login message, scrollback length, the element picker on or off, word wrap in the editor, Mac notifications, and memes. Geist and Geist Mono ship with Lookout.
+- The gear at the bottom of the sidebar has: theme, also under the theme button in the top bar (Default, which is Lookout's own colors with One Dark Pro text, or one of 29 popular VS Code themes, which colors the whole window, the editor and the terminals; a theme without a light version is marked Dark only, and light mode shows Default with it), code font for the terminal and the editor (SF Mono, Menlo, Monaco and installed coding fonts such as JetBrains Mono or Fira Code), interface font (SF Pro or Geist), font size, line spacing, terminal cursor (underline, bar or block, blinking or not, and how fast it blinks), key repeat for ⌫, Delete, ← and → (fast by default, or the macOS setting), the Option key as Meta, copy on select, the last login message, scrollback length, the element picker on or off, word wrap in the editor, Mac notifications, and memes. Geist ships with Lookout.
 - Settings changed in one window apply to the other windows.
 - The sidebar minimizes to a narrow strip with small icons.
 - The cat button in the corner shows a random meme from Reddit through [meme-api.com](https://github.com/D3vd/Meme_Api), skipping posts marked NSFW. Settings > Memes turns it off.
@@ -162,7 +162,7 @@ cargo test
 | `src/App.tsx` | Layout, tabs, menus, settings, shortcuts |
 | `src/components/Update.tsx` | The update button and panel, shared with Dispatch, Cells and Patchy. `VITE_FAKE_UPDATE=1 pnpm tauri dev` shows a made-up update. |
 | `src/components/` | Terminal, editor, diff view, panels, menus, dialogs |
-| `src/lib/` | Editor and terminal themes, settings |
+| `src/lib/` | Themes, settings, the split layout |
 | `patches/` | A fix for xterm.js's WebGL renderer, applied by pnpm |
 | `src-tauri/icons/` | App icon. `build-icon.sh` rebuilds the macOS 26 icon. |
 
@@ -189,9 +189,9 @@ cargo test
 | [Icons - Maintained](https://github.com/yusifaliyevpro/vscode-icons) | File icons in the explorer and tabs | MIT |
 | [Hugeicons](https://hugeicons.com) | Icons | MIT |
 | [Lucide](https://lucide.dev) | The title bar glyph | ISC |
-| [Geist and Geist Mono](https://vercel.com/font) | Interface and code fonts | OFL-1.1 |
+| [Geist](https://vercel.com/font) | Interface font | OFL-1.1 |
 | [iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes) | Terminal theme colors | MIT |
-| [tm-themes](https://github.com/shikijs/textmate-grammars-themes) | Editor theme colors | MIT |
+| [tm-themes](https://github.com/shikijs/textmate-grammars-themes) | Editor and window theme colors | MIT |
 
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) has more detail.
 

@@ -12,7 +12,6 @@ import {
   Bell,
   Check,
   ClipboardCopy,
-  Code,
   Copy,
   Cat,
   FilePlus2,
@@ -26,6 +25,7 @@ import {
   LogIn,
   Moon,
   Option,
+  Palette,
   Pencil,
   Plus,
   Rows3,
@@ -63,8 +63,8 @@ import { noticeFor, NoticePeeks, NotificationBell } from "./components/Notificat
 import { QuickOpen } from "./components/QuickOpen";
 import { SearchPanel } from "./components/SearchPanel";
 import { TabBar, type DragMode } from "./components/TabBar";
+import { ThemePicker } from "./components/ThemePicker";
 import { terminals, TerminalView, type TerminalEvent } from "./components/TerminalView";
-import { EDITOR_THEME_KEY, EDITOR_THEMES, editorColors, savedEditorTheme } from "./lib/editorThemes";
 import {
   availableFonts,
   BLINK_SPEEDS,
@@ -80,7 +80,7 @@ import {
 } from "./lib/settings";
 import { newGroupId, newTabId, type ClaudeState, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
 import { dividers, halfOf, insertPane, MAX_PANES, paneRects, panesOf, paneTowards, removePane, resizeSplit, sideAt, type Divider, type Layout, type Rect, type Side } from "./lib/layout";
-import { savedTerminalTheme, TERMINAL_THEME_KEY, TERMINAL_THEMES, terminalColors } from "./lib/terminalThemes";
+import { applyTheme, COLOR_THEME_KEY, DEFAULT_WINDOW, savedColorTheme, themeVersion, THEMES } from "./lib/themes";
 import { iconUrl } from "./icons";
 import appIcon from "../src-tauri/icons/128x128@2x.png";
 
@@ -222,10 +222,10 @@ export default function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === "light" ? "light" : "dark"));
-  const [terminalTheme, setTerminalTheme] = useState(savedTerminalTheme);
+  /** The color theme: an id from THEMES. `theme` is light or dark mode. */
+  const [colorTheme, setColorTheme] = useState(savedColorTheme);
   /** Set on the first click, so the switch's stretch animation does not play at startup. */
   const [themeSwitched, setThemeSwitched] = useState(false);
-  const [editorTheme, setEditorTheme] = useState(savedEditorTheme);
   const [git, setGit] = useState<GitStatus | null | undefined>(undefined);
   const [gitBusy, setGitBusy] = useState<string | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
@@ -345,8 +345,7 @@ export default function App() {
     const onStorage = (e: StorageEvent) => {
       if (e.key === SETTINGS_KEY) setSettings(loadSettings());
       else if (e.key === THEME_KEY && (e.newValue === "dark" || e.newValue === "light")) setTheme(e.newValue);
-      else if (e.key === EDITOR_THEME_KEY && e.newValue) setEditorTheme(e.newValue);
-      else if (e.key === TERMINAL_THEME_KEY && e.newValue) setTerminalTheme(e.newValue);
+      else if (e.key === COLOR_THEME_KEY && e.newValue) setColorTheme(e.newValue);
       else if (e.key === FONT_KEY && Number(e.newValue)) setFontSize(Number(e.newValue));
       else if (e.key === MEMES_KEY) setMemes(e.newValue !== "0");
     };
@@ -359,14 +358,12 @@ export default function App() {
   // Read by the patched xterm WebGL renderer (patches/@xterm__addon-webgl.patch).
   useEffect(() => void ((globalThis as { __lookoutBlinkMs?: number }).__lookoutBlinkMs = settings.blinkMs), [settings.blinkMs]);
 
-  // The editor's syntax colors are CSS variables; set on the root they override styles.css.
-  useEffect(() => {
-    const { selection, ...syntax } = editorColors(editorTheme, theme);
-    const style = document.documentElement.style;
-    for (const [key, value] of Object.entries(syntax)) style.setProperty(`--syn-${key}`, value);
-    if (selection) style.setProperty("--editor-selection", selection);
-    else style.removeProperty("--editor-selection");
-  }, [editorTheme, theme]);
+  // The theme's colors are CSS variables; set on the root they override styles.css.
+  useEffect(() => applyTheme(colorTheme, theme), [colorTheme, theme]);
+  const pickTheme = (id: string) => {
+    setColorTheme(id);
+    localStorage.setItem(COLOR_THEME_KEY, id);
+  };
 
   useEffect(() => {
     localStorage.setItem(FONT_KEY, String(fontSize));
@@ -1638,52 +1635,27 @@ export default function App() {
 
   const settingsMenu = (e: ReactMouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const editorLabel = EDITOR_THEMES.find((t) => t.id === editorTheme)?.label;
-    const terminalLabel = TERMINAL_THEMES.find((t) => t.id === terminalTheme)?.label;
+    const themeLabel = THEMES.find((t) => t.id === colorTheme)?.label;
     setMenu({
       x: rect.right + 6,
       y: rect.bottom,
       items: [
         {
-          label: "Editor theme",
-          icon: <Code size={14} />,
-          detail: editorLabel,
+          label: "Theme",
+          icon: <Palette size={14} />,
+          detail: themeLabel,
           submenu: {
-            title: "Editor theme",
-            note: "Colors of code in files you open in the editor.",
-            items: EDITOR_THEMES.map((t) => {
-              const colors = editorColors(t.id, theme);
+            title: "Theme",
+            note: "Colors of the window, the code in the editor and the text in terminals. Default is Lookout's own colors with One Dark Pro text.",
+            items: THEMES.map((t) => {
+              const version = themeVersion(t.id, theme);
+              const colors = version.syntax;
               return {
                 label: t.label,
-                icon: <ThemeSwatch colors={[colors.keyword, colors.string, colors.function]} />,
+                icon: <ThemeSwatch bg={(version.window ?? DEFAULT_WINDOW[theme]).bg} colors={[colors.keyword, colors.string, colors.function]} />,
                 detail: t.light ? undefined : "Dark mode only",
-                checked: t.id === editorTheme,
-                onSelect: () => {
-                  setEditorTheme(t.id);
-                  localStorage.setItem(EDITOR_THEME_KEY, t.id);
-                },
-              };
-            }),
-          },
-        },
-        {
-          label: "Terminal theme",
-          icon: <SquareTerminal size={14} />,
-          detail: terminalLabel,
-          submenu: {
-            title: "Terminal theme",
-            note: "Colors of text in terminal tabs: the prompt, commands, and program output.",
-            items: TERMINAL_THEMES.map((t) => {
-              const colors = terminalColors(t.id, theme);
-              return {
-                label: t.label,
-                icon: <ThemeSwatch colors={[colors.red!, colors.green!, colors.blue!]} />,
-                detail: t.light ? undefined : "Dark mode only",
-                checked: t.id === terminalTheme,
-                onSelect: () => {
-                  setTerminalTheme(t.id);
-                  localStorage.setItem(TERMINAL_THEME_KEY, t.id);
-                },
+                checked: t.id === colorTheme,
+                onSelect: () => pickTheme(t.id),
               };
             }),
           },
@@ -1924,6 +1896,7 @@ export default function App() {
           })}
         </div>
         <div className="titlebar-actions">
+          <ThemePicker current={colorTheme} mode={theme} onPick={pickTheme} />
           <UpdateButton app="Lookout" repo="lakiAlex/lookout" restartNote="Running terminals end." notify={settings.banners} />
           {git && <GitChip status={git} open={panel === "git"} onClick={() => setPanel((p) => (p === "git" ? null : "git"))} />}
           <WindowSnap />
@@ -2096,7 +2069,7 @@ export default function App() {
                   onClipboard={noteClipboard}
                   style={style}
                   theme={theme}
-                  terminalTheme={terminalTheme}
+                  colorTheme={colorTheme}
                   fontSize={fontSize}
                   settings={settings}
                   // The screen copy of a moved tab is not needed once its session is attached.
@@ -2253,9 +2226,9 @@ export default function App() {
 }
 
 /** A small preview of a theme: three of its colors on the app's background. */
-function ThemeSwatch({ colors }: { colors: string[] }) {
+function ThemeSwatch({ bg, colors }: { bg: string; colors: string[] }) {
   return (
-    <span className="theme-swatch">
+    <span className="theme-swatch" style={{ background: bg }}>
       {colors.map((c, i) => (
         <i key={i} style={{ background: c }} />
       ))}

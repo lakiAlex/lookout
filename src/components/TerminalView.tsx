@@ -12,7 +12,7 @@ import { ChevronDown, ChevronUp, X } from "./icons";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "../api";
 import { fontCss, KEY_REPEAT, type Settings } from "../lib/settings";
-import { terminalColors } from "../lib/terminalThemes";
+import { terminalColors } from "../lib/themes";
 import type { Theme } from "../lib/theme";
 
 /** What the rest of the app can do with a terminal. */
@@ -178,8 +178,8 @@ interface TerminalViewProps {
   snapshot?: string;
   active: boolean;
   theme: Theme;
-  /** An id from TERMINAL_THEMES. */
-  terminalTheme: string;
+  /** The color theme: an id from THEMES. */
+  colorTheme: string;
   fontSize: number;
   settings: Settings;
   onSession: (sessionId: string) => void;
@@ -221,7 +221,7 @@ export function TerminalView(props: TerminalViewProps) {
       macOptionClickForcesSelection: true,
       // The background is transparent so the terminal shows the same color as the top bar.
       allowTransparency: true,
-      theme: terminalColors(props.terminalTheme, props.theme),
+      theme: terminalColors(props.colorTheme, props.theme),
     });
     const fit = new FitAddon();
     const search = new SearchAddon();
@@ -564,8 +564,8 @@ export function TerminalView(props: TerminalViewProps) {
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
-    term.options.theme = terminalColors(props.terminalTheme, props.theme);
-  }, [props.theme, props.terminalTheme]);
+    term.options.theme = terminalColors(props.colorTheme, props.theme);
+  }, [props.theme, props.colorTheme]);
 
   useEffect(() => {
     const term = termRef.current;

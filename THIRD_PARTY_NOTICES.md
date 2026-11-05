@@ -24,6 +24,6 @@ The icons come from the free Hugeicons set, stroke-rounded style, through `@huge
 
 `src/assets/vscicons` is the icon set of Icons - Maintained 1.2.12 by Yusif Aliyev, based on Icons by Mhammed Talhaouy, copied unmodified. MIT License, see `src/assets/vscicons/LICENSE.txt`. https://github.com/yusifaliyevpro/vscode-icons
 
-## Geist fonts
+## Geist font
 
-Geist and Geist Mono by Vercel, through `@fontsource-variable/geist` and `@fontsource-variable/geist-mono`, used unchanged as the interface and code font options. SIL Open Font License 1.1, see `node_modules/@fontsource-variable/geist/LICENSE`. https://github.com/vercel/geist-font
+Geist by Vercel, through `@fontsource-variable/geist`, used unchanged as an interface font option. SIL Open Font License 1.1, see `node_modules/@fontsource-variable/geist/LICENSE`. https://github.com/vercel/geist-font

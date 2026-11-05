@@ -1,7 +1,7 @@
 {
   "name": "lookout",
   "private": true,
-  "version": "1.4.2",
+  "version": "1.5.0",
   "packageManager": "pnpm@9.11.0",
   "type": "module",
   "scripts": {
@@ -20,7 +20,6 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@fontsource-variable/geist": "^5.3.0",
-    "@fontsource-variable/geist-mono": "^5.3.0",
     "@hugeicons/core-free-icons": "^4.4.0",
     "@hugeicons/react": "^1.1.10",
     "@lezer/highlight": "^1.2.5",
