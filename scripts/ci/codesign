@@ -1,0 +1,14 @@
+#!/bin/sh
+# The release workflow puts this folder first on PATH, so Tauri's bundler runs
+# this in place of codesign. When it signs the app bundle, it adds a designated
+# requirement on the bundle id, like scripts/install.sh does for local builds.
+# macOS ties an ad hoc app's Accessibility and Screen Recording grants to its
+# designated requirement, and the default one is the hash of that exact build,
+# so without this every update asks for both permissions again.
+for last; do :; done
+case "$last" in
+  *.app | *.app/)
+    exec /usr/bin/codesign -r='designated => identifier "com.laki.lookout"' "$@"
+    ;;
+esac
+exec /usr/bin/codesign "$@"

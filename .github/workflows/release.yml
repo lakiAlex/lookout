@@ -36,6 +36,11 @@ jobs:
       - name: Install frontend deps
         run: pnpm install
 
+      # Signs the app with a requirement on its bundle id, so Accessibility and
+      # Screen Recording stay granted after an update (see scripts/ci/codesign).
+      - name: Codesign wrapper
+        run: echo "$GITHUB_WORKSPACE/scripts/ci" >> "$GITHUB_PATH"
+
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
         env:

@@ -124,6 +124,8 @@ The picker needs two permissions, which Lookout asks for the first time you pick
 - Accessibility, to read elements in other apps. System Settings, Privacy & Security, Accessibility, switch Lookout on.
 - Screen Recording, for the screenshot of the picked element. System Settings, Privacy & Security, Screen & System Audio Recording, switch Lookout on, then quit and reopen Lookout. Without it, picks are sent without a screenshot.
 
+Both stay on after updates from 1.4.2. Release builds are signed with a requirement on the bundle id, which macOS checks the permissions against, instead of the build itself. Coming from 1.4.1 or earlier, switch them on once more after the update.
+
 ## Build from source
 
 Requirements: [Rust](https://rustup.rs) (stable), Node.js 20 or later, and [pnpm](https://pnpm.io).
@@ -134,7 +136,7 @@ pnpm tauri dev           # run in development mode
 scripts/install.sh       # build Lookout.app and install it in /Applications
 ```
 
-`scripts/install.sh` signs the app with a requirement on its bundle id instead of the build, so macOS keeps the Accessibility permission across rebuilds. When Lookout runs through `pnpm tauri dev`, macOS gives the permission to the terminal that started it instead.
+`scripts/install.sh` signs the app with a requirement on its bundle id instead of the build, so macOS keeps the Accessibility permission across rebuilds. The release workflow does the same through `scripts/ci/codesign`. When Lookout runs through `pnpm tauri dev`, macOS gives the permission to the terminal that started it instead.
 
 ## Tests
 

@@ -1,7 +1,7 @@
 {
   "name": "lookout",
   "private": true,
-  "version": "1.4.1",
+  "version": "1.4.2",
   "packageManager": "pnpm@9.11.0",
   "type": "module",
   "scripts": {
