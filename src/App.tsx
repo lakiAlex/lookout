@@ -711,12 +711,15 @@ export default function App() {
 
   const openFolder = useCallback(
     async (path: string, terminal = true) => {
+      const before = latest.current.folder;
       setFolder(path);
       setGit(undefined);
       setQuickFiles(null);
       setRecent(await api.addRecentFolder(path));
       void api.watchFolder(path).catch((e) => toast("error", toAppError(e).message));
       void getCurrentWindow().setTitle(`Lookout - ${basename(path)}`);
+      // Another folder: terminals that wait at the prompt with nothing typed move to it.
+      if (before && before !== path) for (const tab of latest.current.tabs) if (tab.kind === "terminal") terminals.get(tab.id)?.cd(path);
       if (terminal && !latest.current.tabs.some((t) => t.kind === "terminal")) newTerminal(false, path);
     },
     [newTerminal, toast],

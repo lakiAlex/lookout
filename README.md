@@ -22,6 +22,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 **Terminal**
 
 - Tabs with your login shell, started in the open folder. ⌘T opens a terminal, ⇧⌘T (or the Claude button in the tab bar) opens a terminal that runs `claude`.
+- Opening another folder moves the window's terminals that wait at an empty zsh prompt to it. The prompt is drawn again in place, so no `cd` line shows on screen or in the history. A terminal that runs a program or has something typed stays where it is.
 - New terminals start with "Last login: ..." as in Terminal, unless `~/.hushlogin` exists. Settings > Last login message turns it off.
 - Tab titles follow the running program, and tabs running Claude Code get the Claude icon.
 - GPU rendering, clickable links, find (⌘F) and clear (⌘K).
@@ -30,6 +31,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 - Copying from a terminal or pasting into one shows Copied or Pasted above the meme button for a moment.
 - In dark mode Claude Code's prompt lines are drawn at half their brightness.
 - Keys set up for Claude Code: Shift+Return is a new line in the prompt, ⌘← and ⌘→ go to the start and end of the line, ⌘⌫ deletes the line, ⌥← and ⌥→ move by word, ⌥⌫ deletes a word.
+- ⌘Z undoes the last change at the prompt, in zsh and in Claude Code. A paste is undone as a whole.
 - For zsh, Lookout loads your own `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin` and then adds what is missing: a colored prompt with the folder and git branch when you use the macOS default prompt, command highlighting with zsh-syntax-highlighting when you do not load it yourself, and colored `ls` output. It also marks where each command starts and ends, for notifications, and starts `claude` with two hooks that report when Claude is done (see Notifications). This only applies inside Lookout.
 
 **Windows**
@@ -97,6 +99,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 | ⌘B | Show or hide the sidebar panel |
 | ⇧⌘E, ⇧⌘F, ⌃⇧G | Files, search, source control |
 | ⌘F, ⌘K | Find in terminal, clear terminal |
+| ⌘Z | Undo at the prompt in a terminal |
 | ⌘S | Save file |
 | ⌘=, ⌘-, ⌘0 | Bigger, smaller, default font size |
 

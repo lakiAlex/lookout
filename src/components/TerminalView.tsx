@@ -25,6 +25,8 @@ export interface TerminalHandle {
   clear: () => void;
   find: () => void;
   sessionId: () => string | null;
+  /** Moves zsh to `path` when it waits at its prompt with nothing typed (see shell/zsh/lookout.zsh). */
+  cd: (path: string) => void;
   /** Hands the session to another window: holds its output and returns the
    * screen and scrollback. Closing the tab afterwards leaves the shell running. */
   moveOut: () => Promise<string>;
@@ -295,6 +297,12 @@ export function TerminalView(props: TerminalViewProps) {
           selectInput();
           return false;
         }
+        // ⌘Z undoes the last change at the prompt, a paste as a whole: Ctrl+_ is undo in zsh and in Claude Code.
+        if (e.key.toLowerCase() === "z" && !e.altKey && !e.ctrlKey && !e.shiftKey) {
+          e.preventDefault();
+          send("\x1f");
+          return false;
+        }
         const map: Record<string, string> = { ArrowLeft: "\x01", ArrowRight: "\x05", Backspace: "\x15" };
         // ⌥⌘ and an arrow moves between the panes of a split.
         if (map[e.key] && !e.altKey) {
@@ -521,6 +529,11 @@ export function TerminalView(props: TerminalViewProps) {
         requestAnimationFrame(() => findInput.current?.select());
       },
       sessionId: () => sessionRef.current,
+      cd: (path) => {
+        // Only at zsh's prompt: no program runs. zsh itself checks that nothing is typed.
+        if (command || !input || input.mark.isDisposed || term.buffer.active.type !== "normal") return;
+        send(`\x1b[7701~${path}\x1b[201~`);
+      },
       moveOut: async () => {
         const id = sessionRef.current;
         if (!id) throw new Error("The terminal is still starting");
