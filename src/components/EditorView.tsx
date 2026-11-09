@@ -18,6 +18,9 @@ import {
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, basename } from "../api";
 import { editorTheme, highlight, languageFor } from "../lib/editor";
+import { isMarkdown } from "../lib/markdown";
+import { Eye, Pencil } from "./icons";
+import { MarkdownView } from "./MarkdownView";
 
 export interface EditorHandle {
   save: () => Promise<boolean>;
@@ -28,6 +31,8 @@ export interface EditorHandle {
   focus: () => void;
   /** The text in the editor, saved or not. */
   text: () => string;
+  /** Markdown files only: switches between the page and the editor. */
+  toggleRendered: () => void;
 }
 
 export const editors = new Map<string, EditorHandle>();
@@ -44,6 +49,8 @@ interface EditorViewProps {
   onDirty: (dirty: boolean) => void;
   onSaved: () => void;
   onError: (message: string) => void;
+  /** A link in a Markdown page to another file was clicked. */
+  onOpenFile: (path: string) => void;
   /** Takes the keyboard when shown. In a split window, only the tab in use does. */
   primary?: boolean;
   /** Its place, in a split window. */
@@ -60,6 +67,21 @@ export function EditorView(props: EditorViewProps) {
   const wrap = useRef(new Compartment());
   const latest = useRef(props);
   latest.current = props;
+  /** Markdown files open as a page; a line to reveal opens the editor. */
+  const markdown = isMarkdown(props.path);
+  const [rendered, setRendered] = useState(markdown && !props.reveal);
+  const renderedRef = useRef(rendered);
+  /** The text the page shows: it follows the editor while the page is shown. */
+  const [pageText, setPageText] = useState("");
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  const showRendered = (on: boolean) => {
+    if (!markdown || renderedRef.current === on) return;
+    renderedRef.current = on;
+    if (on && view.current) setPageText(view.current.state.doc.toString());
+    setRendered(on);
+    requestAnimationFrame(() => (on ? pageRef.current?.focus() : view.current?.focus()));
+  };
 
   const setDirty = (value: boolean) => {
     if (dirty.current !== value) {
@@ -87,6 +109,12 @@ export function EditorView(props: EditorViewProps) {
   const goTo = (line: number, from?: number, to?: number) => {
     const v = view.current;
     if (!v) return;
+    if (renderedRef.current) {
+      // The editor has no size while hidden, so it scrolls once it is shown.
+      showRendered(false);
+      requestAnimationFrame(() => goTo(line, from, to));
+      return;
+    }
     const lineInfo = v.state.doc.line(Math.max(1, Math.min(line, v.state.doc.lines)));
     const anchor = lineInfo.from + (from ?? 0);
     const head = lineInfo.from + (to ?? from ?? 0);
@@ -157,7 +185,9 @@ export function EditorView(props: EditorViewProps) {
           editorTheme,
           highlight,
           CodeMirror.updateListener.of((update) => {
-            if (update.docChanged) setDirty(update.state.doc.toString() !== saved.current);
+            if (!update.docChanged) return;
+            setDirty(update.state.doc.toString() !== saved.current);
+            if (renderedRef.current) setPageText(update.state.doc.toString());
           }),
         ],
       }),
@@ -169,10 +199,15 @@ export function EditorView(props: EditorViewProps) {
         if (!dirty.current) void load(true);
       },
       goTo,
-      find: () => openSearchPanel(v),
+      find: () => {
+        if (!renderedRef.current) return void openSearchPanel(v);
+        showRendered(false);
+        requestAnimationFrame(() => openSearchPanel(v));
+      },
       isDirty: () => dirty.current,
-      focus: () => v.focus(),
+      focus: () => (renderedRef.current ? pageRef.current?.focus() : v.focus()),
       text: () => v.state.doc.toString(),
+      toggleRendered: () => showRendered(!renderedRef.current),
     });
     void load(false).then(() => {
       const text = latest.current.text;
@@ -195,7 +230,7 @@ export function EditorView(props: EditorViewProps) {
 
   const primary = props.primary ?? true;
   useEffect(() => {
-    if (props.active && primary) requestAnimationFrame(() => view.current?.focus());
+    if (props.active && primary) requestAnimationFrame(() => (renderedRef.current ? pageRef.current?.focus() : view.current?.focus()));
   }, [props.active, primary]);
 
   useEffect(() => {
@@ -205,7 +240,20 @@ export function EditorView(props: EditorViewProps) {
   return (
     <div className={`editor-view${props.active ? "" : " hidden"}`} style={props.style} data-tab={props.tabId}>
       {problem && <div className="editor-problem">{problem}</div>}
-      <div ref={host} className="editor-host" style={problem ? { display: "none" } : undefined} />
+      <div ref={host} className="editor-host" style={problem || rendered ? { display: "none" } : undefined} />
+      {markdown && !problem && (
+        <>
+          <MarkdownView path={props.path} text={pageText} hidden={!rendered} scrollRef={pageRef} onOpenFile={props.onOpenFile} />
+          <button
+            type="button"
+            className="button small markdown-toggle"
+            title={rendered ? "Edit the Markdown (⇧⌘V)" : "Show the page (⇧⌘V)"}
+            onClick={() => showRendered(!rendered)}
+          >
+            {rendered ? <Pencil size={13} /> : <Eye size={13} />} {rendered ? "Edit" : "Preview"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

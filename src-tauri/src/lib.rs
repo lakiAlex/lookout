@@ -221,6 +221,10 @@ fn move_paths(paths: Vec<String>, dir: String) -> AppResult<Vec<(String, String)
 
 #[tauri::command]
 fn watch_folder(app: AppHandle, window: Window, state: State<AppState>, path: String) -> AppResult<()> {
+    // Markdown pages show the folder's images through the asset protocol.
+    if let Err(e) = app.asset_protocol_scope().allow_directory(&path, true) {
+        eprintln!("asset scope for {path}: {e}");
+    }
     let watcher = files::watch(app, window.label(), &path)?;
     state.watchers.lock().unwrap().insert(window.label().to_string(), watcher);
     Ok(())

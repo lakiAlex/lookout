@@ -76,6 +76,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 
 - Files open in tabs with syntax highlighting for most languages, find and replace, multiple cursors, bracket matching, folding and ⌘S to save.
 - A single click opens a preview tab that the next single click replaces, as in VS Code. A double click or an edit keeps the tab.
+- Markdown files open as a page: headings, lists, task lists, tables, images from the folder and code blocks with syntax highlighting. The page follows the file as it changes on disk, so a plan Claude writes shows up as it is written. The Edit button or ⇧⌘V switches to the editor and back. Links open in the browser, go to a heading, or open another file in a tab. HTML in the file can not run scripts.
 
 **Settings**
 
@@ -101,6 +102,7 @@ It is built with [Tauri 2](https://tauri.app): a Rust backend for the shell sess
 | ⌘F, ⌘K | Find in terminal, clear terminal |
 | ⌘Z | Undo at the prompt in a terminal |
 | ⌘S | Save file |
+| ⇧⌘V | Markdown page or editor |
 | ⌘=, ⌘-, ⌘0 | Bigger, smaller, default font size |
 
 ## Install

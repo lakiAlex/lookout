@@ -63,6 +63,7 @@ import {
   TextWrapIcon,
   Tick02Icon,
   Undo02Icon,
+  ViewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
@@ -103,6 +104,7 @@ export const Colors = icon(ColorsIcon);
 export const Code = icon(SourceCodeIcon);
 export const Copy = icon(Copy01Icon);
 export const Ellipsis = icon(MoreHorizontalIcon);
+export const Eye = icon(ViewIcon);
 export const GitCommit = icon(GitCommitIcon);
 export const FilePlus2 = icon(FileAddIcon);
 export const FileText = icon(File01Icon);

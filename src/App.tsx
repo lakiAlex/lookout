@@ -81,6 +81,7 @@ import {
 import { newGroupId, newTabId, type ClaudeState, type Reveal, type Tab, type WindowStart } from "./lib/tabs";
 import { dividers, halfOf, insertPane, MAX_PANES, paneRects, panesOf, paneTowards, removePane, resizeSplit, sideAt, type Divider, type Layout, type Rect, type Side } from "./lib/layout";
 import { applyTheme, COLOR_THEME_KEY, DEFAULT_WINDOW, savedColorTheme, themeVersion, THEMES } from "./lib/themes";
+import { isMarkdown } from "./lib/markdown";
 import { iconUrl } from "./icons";
 import appIcon from "../src-tauri/icons/128x128@2x.png";
 
@@ -1277,6 +1278,12 @@ export default function App() {
         if (key === "k") return run(() => terminals.get(tab.id)?.clear());
         if (key === "f") return run(() => terminals.get(tab.id)?.find());
       }
+      if (tab?.kind === "file") {
+        // ⇧⌘V switches a Markdown file between its page and the editor, as in VS Code.
+        if (e.shiftKey && key === "v" && isMarkdown(tab.path)) return run(() => editors.get(tab.id)?.toggleRendered());
+        // The editor handles ⌘F itself; this is for a Markdown page.
+        if (key === "f" && !e.shiftKey && !e.defaultPrevented) return run(() => editors.get(tab.id)?.find());
+      }
       if (key === "r") e.preventDefault(); // ⌘R would reload the web view.
     };
     window.addEventListener("keydown", onKey);
@@ -2098,6 +2105,7 @@ export default function App() {
                   }
                   onSaved={() => void refreshGit()}
                   onError={(m) => toast("error", m)}
+                  onOpenFile={(path) => openFile(path, true)}
                 />
               );
             }
