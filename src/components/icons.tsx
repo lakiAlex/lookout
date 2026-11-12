@@ -1,6 +1,6 @@
 // The app's icons: Hugeicons stroke-rounded (MIT, https://hugeicons.com), under the
-// names the components use. The title bar's terminal glyph stays Lucide, since it
-// matches the app icon.
+// names the components use. The title bar's BrandMark is the app icon's glyph.
+import type { SVGProps } from "react";
 import {
   ArrowDown01Icon,
   ArrowDown02Icon,
@@ -67,7 +67,39 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
-export { Terminal } from "lucide-react";
+// Lucide terminal, drawn like the app icon (src-tauri/icons/make-icon.py): a thick raised band with a
+// side face and a fold along the diagonal. Colors come from the --brand-* variables in styles.css.
+const BRAND_PATHS = [
+    "M12 19h8",
+    "m4 17 6-6-6-6",
+];
+
+export function BrandMark({ size = 17 }: { size?: number }) {
+  const band = { stroke: "currentColor", strokeWidth: 3.2, strokeLinecap: "round", strokeLinejoin: "round" } as const;
+  const glyph = (props: SVGProps<SVGGElement>) => (
+    <g {...band} {...props}>
+      {BRAND_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </g>
+  );
+  return (
+    <svg className="brand-mark" width={size} height={size} viewBox="-0.5 -0.5 25 25" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="brand-mark-top" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="24" y2="24">
+          <stop offset="0" stopColor="var(--brand-top-1)" />
+          <stop offset="1" stopColor="var(--brand-top-2)" />
+        </linearGradient>
+        <clipPath id="brand-mark-fold">
+          <path d="M24.5 -0.5V24.5H-0.5z" />
+        </clipPath>
+      </defs>
+      {glyph({ color: "var(--brand-side)", transform: "translate(0.35 0.7)" })}
+      {glyph({ stroke: "url(#brand-mark-top)" })}
+      {glyph({ color: "var(--brand-fold)", clipPath: "url(#brand-mark-fold)" })}
+    </svg>
+  );
+}
 
 interface IconProps {
   size?: number;

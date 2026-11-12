@@ -39,7 +39,7 @@ import {
   TextCursor,
   TextWrap,
   Type,
-  Terminal,
+  BrandMark,
   Trash2,
   X,
 } from "./components/icons";
@@ -1878,7 +1878,7 @@ export default function App() {
       <header className="titlebar" data-tauri-drag-region>
         <div className="titlebar-left" data-tauri-drag-region>
           <span className="brand" data-tauri-drag-region>
-            <Terminal size={15} strokeWidth={2.2} />
+            <BrandMark />
             <span className="brand-name" data-tauri-drag-region>
               Lookout
             </span>
