@@ -14,6 +14,7 @@ import {
   ClipboardCopy,
   Copy,
   Cat,
+  ChartColumn,
   FilePlus2,
   FileText,
   FolderOpen,
@@ -84,6 +85,7 @@ import { applyTheme, COLOR_THEME_KEY, DEFAULT_WINDOW, savedColorTheme, themeVers
 import { isMarkdown } from "./lib/markdown";
 import { iconUrl } from "./icons";
 import appIcon from "../src-tauri/icons/128x128@2x.png";
+import { saveUsageStats, usageStatsOn } from "./lib/usage";
 
 const THEME_KEY = "lookout.theme";
 /** v2: the default became narrower, so widths saved for the old default are not used. */
@@ -214,6 +216,7 @@ export default function App() {
   const [compact, setCompact] = useState(() => localStorage.getItem(COMPACT_KEY) === "1");
   /** The meme button in the corner. */
   const [memes, setMemes] = useState(() => localStorage.getItem(MEMES_KEY) !== "0");
+  const [usageStats, setUsageStats] = useState(usageStatsOn);
   const [settings, setSettings] = useState(loadSettings);
   const changeSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings((current) => ({ ...current, [key]: value }));
@@ -1847,6 +1850,15 @@ export default function App() {
                 localStorage.setItem(MEMES_KEY, on ? "1" : "0");
               },
             })),
+          },
+        },
+        {
+          label: "Anonymous usage stats",
+          icon: <ChartColumn size={14} />,
+          checked: usageStats,
+          onSelect: () => {
+            setUsageStats(!usageStats);
+            saveUsageStats(!usageStats);
           },
         },
       ],

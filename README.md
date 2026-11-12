@@ -129,6 +129,10 @@ The picker needs two permissions, which Lookout asks for the first time you pick
 
 Both stay on after updates from 1.4.2. Release builds are signed with a requirement on the bundle id, which macOS checks the permissions against, instead of the build itself. Coming from 1.4.1 or earlier, switch them on once more after the update.
 
+## Usage stats
+
+Lookout sends one anonymous event to [Aptabase](https://aptabase.com) when it starts, to count how many people use it. The event has the app version, macOS version and locale, with no personal data and nothing about your projects or terminals. Aptabase uses the IP address to look up the country and does not store it. Turn it off in the gear menu, Anonymous usage stats. Builds from source send nothing.
+
 ## Build from source
 
 Requirements: [Rust](https://rustup.rs) (stable), Node.js 20 or later, and [pnpm](https://pnpm.io).

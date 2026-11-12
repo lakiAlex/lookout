@@ -2,6 +2,7 @@ import "@fontsource-variable/geist";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { trackAppStarted } from "./lib/usage";
 import { applyTheme, savedColorTheme } from "./lib/themes";
 import "./styles.css";
 
@@ -20,3 +21,4 @@ void Promise.race([fonts, new Promise((resolve) => setTimeout(resolve, 800))]).f
     </React.StrictMode>,
   ),
 );
+trackAppStarted();

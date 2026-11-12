@@ -440,6 +440,8 @@ async fn listening_ports(state: State<'_, AppState>) -> Result<Vec<ports::Listen
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Anonymous usage stats. Only release builds from the workflow have the key. Without it the plugin sends nothing.
+        .plugin(tauri_plugin_aptabase::Builder::new(option_env!("APTABASE_APP_KEY").unwrap_or("")).build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())

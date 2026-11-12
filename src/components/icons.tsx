@@ -15,6 +15,7 @@ import {
   CancelCircleIcon,
   CaseSensitiveIcon,
   CatIcon,
+  ChartColumnIcon,
   ClaudeIcon,
   CheckmarkCircle02Icon,
   CleanIcon,
@@ -122,6 +123,7 @@ export const Bell = icon(NotificationSquareIcon);
 export const BrushCleaning = icon(CleanIcon);
 export const CaseSensitive = icon(CaseSensitiveIcon);
 export const Cat = icon(CatIcon);
+export const ChartColumn = icon(ChartColumnIcon);
 export const Check = icon(Tick02Icon);
 export const Claude = icon(ClaudeIcon);
 export const CircleCheck = icon(CheckmarkCircle02Icon);
