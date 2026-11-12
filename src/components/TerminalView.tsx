@@ -1,4 +1,5 @@
 import { Channel } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
@@ -323,11 +324,25 @@ export function TerminalView(props: TerminalViewProps) {
     });
 
     // Lookout's marks, OSC 7701 (see shell/zsh/lookout.zsh): a command
-    // starting and ending, and the path of a file with a Claude Code hook's JSON.
+    // starting and ending, and where zsh reads the command line.
     let command: { line: string; at: number } | null = null;
     /** Where zsh started reading the command line (OSC 7701 "input"), until the command runs. */
     let input: { mark: IMarker; col: number } | null = null;
+    // Claude Code's hooks save their JSON to a file, and Lookout sends this
+    // session's files as "claude-hook" (see src-tauri/src/hooks.rs).
+    // One at a time, so the events keep their order.
     let hooks: Promise<void> = Promise.resolve();
+    const readHook = (path: string) => {
+      hooks = hooks
+        .then(() => api.claudeHook(path))
+        .then((hook) => {
+          if (hook && typeof hook.hook_event_name === "string") latest.current.onEvent({ type: "claude", hook: hook as unknown as ClaudeHook });
+        })
+        .catch(() => undefined);
+    };
+    const unHook = getCurrentWebviewWindow().listen<{ session: string; path: string }>("claude-hook", (event) => {
+      if (event.payload.session === sessionRef.current) readHook(event.payload.path);
+    });
     term.parser.registerOscHandler(7701, (data) => {
       const [kind, ...rest] = data.split(";");
       const value = rest.join(";");
@@ -343,13 +358,8 @@ export function TerminalView(props: TerminalViewProps) {
         latest.current.onEvent({ type: "command", line: command.line, exitCode: Number(value) || 0, seconds: (Date.now() - command.at) / 1000 });
         command = null;
       } else if (kind === "claude-file") {
-        // One at a time, so the events keep their order.
-        hooks = hooks
-          .then(() => api.claudeHook(value))
-          .then((hook) => {
-            if (hook && typeof hook.hook_event_name === "string") latest.current.onEvent({ type: "claude", hook: hook as unknown as ClaudeHook });
-          })
-          .catch(() => undefined);
+        // Hooks of earlier versions, which sent the file's path through the terminal.
+        readHook(value);
       } else if (kind === "claude") {
         // Claude sessions started before the hooks moved to files.
         const hook = decodeHook(value);
@@ -563,6 +573,7 @@ export function TerminalView(props: TerminalViewProps) {
 
     return () => {
       disposed = true;
+      void unHook.then((un) => un());
       window.clearTimeout(fitTimer);
       window.clearTimeout(heldTimer);
       observer.disconnect();

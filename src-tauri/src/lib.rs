@@ -2,6 +2,7 @@ mod error;
 mod files;
 mod git;
 mod history;
+mod hooks;
 mod notices;
 mod picker;
 mod ports;
@@ -63,17 +64,21 @@ pub(crate) fn hooks_dir(app: &AppHandle) -> std::io::Result<PathBuf> {
 /// Reads a Claude Code hook's JSON from the file its hook wrote, deletes the
 /// file and returns the fields Lookout uses. The full JSON can be megabytes
 /// (PostToolUse carries the tool's whole output), so it is passed as a file
-/// instead of through the terminal, where it got mixed into Claude's screen.
+/// (see hooks.rs). Files are in hooks/<session id>, or directly in the hooks
+/// or temporary folder for sessions that sent the path through the terminal.
 #[tauri::command]
 fn claude_hook(app: AppHandle, path: String) -> AppResult<Option<serde_json::Value>> {
     let path = PathBuf::from(path);
     let named = path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("lookout-hook."));
     let parent = path.parent().and_then(|p| p.canonicalize().ok());
+    let grandparent = parent.as_deref().and_then(|p| p.parent()).map(PathBuf::from);
+    let hooks = hooks_dir(&app).ok().and_then(|d| d.canonicalize().ok());
     let allowed = [hooks_dir(&app).ok(), Some(std::env::temp_dir()), Some(PathBuf::from("/tmp"))]
         .into_iter()
         .flatten()
         .filter_map(|d| d.canonicalize().ok())
-        .any(|d| Some(&d) == parent.as_ref());
+        .any(|d| Some(&d) == parent.as_ref())
+        || (hooks.is_some() && grandparent == hooks);
     if !named || !allowed {
         return Ok(None);
     }
@@ -456,14 +461,23 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
             std::fs::create_dir_all(&dir)?;
-            // Hook files no terminal read, from tabs closed before they arrived.
+            // Hook files no terminal read, from tabs closed before they arrived,
+            // and the folders of sessions from an earlier run.
             if let Ok(hooks) = hooks_dir(app.handle()) {
                 let old = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
                 for entry in std::fs::read_dir(hooks).into_iter().flatten().flatten() {
-                    if entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < old) {
+                    if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                        let _ = std::fs::remove_dir_all(entry.path());
+                    } else if entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t < old) {
                         let _ = std::fs::remove_file(entry.path());
                     }
                 }
+            }
+            match hooks::watch(app.handle().clone()) {
+                Ok(watcher) => {
+                    app.manage(watcher);
+                }
+                Err(e) => eprintln!("hook watcher failed: {e}"),
             }
             app.manage(AppState {
                 sessions: Sessions::default(),

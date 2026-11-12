@@ -127,9 +127,14 @@ impl Sessions {
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "Lookout");
         cmd.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
-        // Claude Code's hooks leave their JSON here and send Lookout only the
-        // file's path (see shell/claude-settings.json).
+        // Claude Code's hooks leave their JSON in hooks/<session id>, where
+        // Lookout watches for it (see shell/claude-settings.json and hooks.rs).
+        // Nothing is written to the terminal, where it could land in the
+        // middle of Claude's own output and break its screen.
+        let id = uuid::Uuid::new_v4().to_string();
+        cmd.env("LOOKOUT_SESSION", &id);
         if let Ok(dir) = crate::hooks_dir(&app) {
+            let _ = std::fs::create_dir_all(dir.join(&id));
             cmd.env("LOOKOUT_HOOKS", dir);
         }
         if std::env::var("LANG").is_err() {
@@ -164,7 +169,6 @@ impl Sessions {
         if let Some(run) = run {
             writer.write_all(format!("{run}\r").as_bytes())?;
         }
-        let id = uuid::Uuid::new_v4().to_string();
         let exit_id = id.clone();
         let output = Arc::new(Mutex::new(Output { channel: Some(on_data), held: Vec::new() }));
         let reader_output = output.clone();
@@ -176,6 +180,7 @@ impl Sessions {
                     Ok(n) => reader_output.lock().unwrap().send(&buf[..n]),
                 }
             }
+            crate::hooks::remove_session(&app, &exit_id);
             let _ = app.emit("pty-exit", exit_id);
         });
         let session = Session { master: pair.master, writer, child, shell_pid, via_login, owner: owner.to_string(), output };

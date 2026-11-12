@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -w \"$LOOKOUT_TTY\" ] && d=\"${LOOKOUT_HOOKS:-${TMPDIR:-/tmp}}\" && f=$(mktemp \"${d%/}/lookout-hook.XXXXXX\") && cat > \"$f\" && printf '\\033]7701;claude-file;%s\\007' \"$f\" > \"$LOOKOUT_TTY\"; exit 0"
+            "command": "[ -n \"$LOOKOUT_SESSION\" ] && d=\"$LOOKOUT_HOOKS/$LOOKOUT_SESSION\" && [ -d \"$d\" ] && f=$(mktemp \"$d/lookout-hook.XXXXXX\") && cat > \"$f\" && mv \"$f\" \"$f.json\"; exit 0"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -w \"$LOOKOUT_TTY\" ] && d=\"${LOOKOUT_HOOKS:-${TMPDIR:-/tmp}}\" && f=$(mktemp \"${d%/}/lookout-hook.XXXXXX\") && cat > \"$f\" && printf '\\033]7701;claude-file;%s\\007' \"$f\" > \"$LOOKOUT_TTY\"; exit 0"
+            "command": "[ -n \"$LOOKOUT_SESSION\" ] && d=\"$LOOKOUT_HOOKS/$LOOKOUT_SESSION\" && [ -d \"$d\" ] && f=$(mktemp \"$d/lookout-hook.XXXXXX\") && cat > \"$f\" && mv \"$f\" \"$f.json\"; exit 0"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -w \"$LOOKOUT_TTY\" ] && d=\"${LOOKOUT_HOOKS:-${TMPDIR:-/tmp}}\" && f=$(mktemp \"${d%/}/lookout-hook.XXXXXX\") && cat > \"$f\" && printf '\\033]7701;claude-file;%s\\007' \"$f\" > \"$LOOKOUT_TTY\"; exit 0"
+            "command": "[ -n \"$LOOKOUT_SESSION\" ] && d=\"$LOOKOUT_HOOKS/$LOOKOUT_SESSION\" && [ -d \"$d\" ] && f=$(mktemp \"$d/lookout-hook.XXXXXX\") && cat > \"$f\" && mv \"$f\" \"$f.json\"; exit 0"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -w \"$LOOKOUT_TTY\" ] && d=\"${LOOKOUT_HOOKS:-${TMPDIR:-/tmp}}\" && f=$(mktemp \"${d%/}/lookout-hook.XXXXXX\") && cat > \"$f\" && printf '\\033]7701;claude-file;%s\\007' \"$f\" > \"$LOOKOUT_TTY\"; exit 0"
+            "command": "[ -n \"$LOOKOUT_SESSION\" ] && d=\"$LOOKOUT_HOOKS/$LOOKOUT_SESSION\" && [ -d \"$d\" ] && f=$(mktemp \"$d/lookout-hook.XXXXXX\") && cat > \"$f\" && mv \"$f\" \"$f.json\"; exit 0"
           }
         ]
       }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -w \"$LOOKOUT_TTY\" ] && d=\"${LOOKOUT_HOOKS:-${TMPDIR:-/tmp}}\" && f=$(mktemp \"${d%/}/lookout-hook.XXXXXX\") && cat > \"$f\" && printf '\\033]7701;claude-file;%s\\007' \"$f\" > \"$LOOKOUT_TTY\"; exit 0"
+            "command": "[ -n \"$LOOKOUT_SESSION\" ] && d=\"$LOOKOUT_HOOKS/$LOOKOUT_SESSION\" && [ -d \"$d\" ] && f=$(mktemp \"$d/lookout-hook.XXXXXX\") && cat > \"$f\" && mv \"$f\" \"$f.json\"; exit 0"
           }
         ]
       }

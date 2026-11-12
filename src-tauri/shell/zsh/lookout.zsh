@@ -70,11 +70,10 @@ bindkey '\e[7701~' _lookout_cd
 
 # Claude Code started here loads claude-settings.json, whose hooks (session
 # start, prompt, tool use, stop and notification) save the hook's JSON to a file
-# in $LOOKOUT_HOOKS and send its path to this terminal as OSC 7701
-# "claude-file;<path>". Lookout then knows when Claude is
-# working, done or waiting. The
-# user's own settings and hooks load as usual.
-export LOOKOUT_TTY=$TTY
+# in $LOOKOUT_HOOKS/$LOOKOUT_SESSION, which Lookout watches. Lookout then knows
+# when Claude is working, done or waiting. Nothing is written to the terminal,
+# where it could land inside Claude's own output. The user's own settings and
+# hooks load as usual.
 typeset -g _lookout_claude_settings=${LOOKOUT_ZDOTDIR:h}/claude-settings.json
 if (( ! $+functions[claude] )); then
   function claude {
