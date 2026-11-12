@@ -2495,7 +2495,7 @@ checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lookout"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "core-foundation 0.10.1",
  "core-foundation-sys",
